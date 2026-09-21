@@ -1,8 +1,12 @@
-output "cluster_name" { value = aws_eks_cluster.this.name }
-output "region" { value = var.region }
-output "buckets" { value = { for k, v in aws_s3_bucket.telemetry : k => v.id } }
-output "grafana_db_host" { value = aws_db_instance.grafana.address }
-output "grafana_db_secret_arn" { value = aws_db_instance.grafana.master_user_secret[0].secret_arn }
-output "quota_redis_host" { value = aws_elasticache_replication_group.quota.primary_endpoint_address }
-output "quota_secret_arn" { value = aws_secretsmanager_secret.quota.arn }
-output "vpc_cidr" { value = var.vpc_cidr }
+output "cluster_name" { value = module.platform_services.platform.cluster_name }
+output "cluster_arn" { value = module.platform_services.platform.cluster_arn }
+output "region" { value = module.platform_services.platform.region }
+output "availability_zones" { value = module.platform_services.platform.availability_zones }
+output "buckets" { value = module.platform_services.platform.buckets }
+output "grafana_db_host" { value = module.platform_services.platform.grafana_db_host }
+output "grafana_db_secret_arn" { value = module.platform_services.platform.grafana_db_secret_arn }
+output "quota_redis_host" { value = module.platform_services.platform.quota_redis_host }
+output "quota_secret_arn" { value = module.platform_services.platform.quota_secret_arn }
+output "vpc_cidr" { value = module.platform_services.platform.vpc_cidr }
+output "role_arns" { value = module.platform_services.platform.role_arns }
+output "required_role_policies" { value = module.platform_services.required_role_policies }

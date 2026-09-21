@@ -12,8 +12,13 @@ variable "quota_redis_auth_token" {
   sensitive = true
 }
 variable "tags" { type = map(string) }
+variable "existing_role_arns" {
+  type    = map(string)
+  default = {}
+}
 module "region" {
   source                 = "../../modules/region"
+  existing_role_arns     = var.existing_role_arns
   name                   = "olly-us-east-1"
   region                 = "us-east-1"
   vpc_cidr               = "10.40.0.0/16"

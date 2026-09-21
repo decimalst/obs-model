@@ -8,23 +8,21 @@ fi
 values_file=$1
 terraform_output=$2
 python_bin=${PYTHON:-.venv/bin/python}
+# Verify the real API endpoint/account, not the editable context display name.
+"$python_bin" scripts/preflight.py --config "$terraform_output" \
+  --values "$values_file" --operators-values "${values_file%.yaml}.operators.yaml"
 "$python_bin" - "$values_file" <<'PY'
 import sys,yaml
 v=yaml.safe_load(open(sys.argv[1]))
 assert '@sha256:' in v['images']['quota'], 'Publish and pin the log-quota image first'
 assert not any('REPLACE' in str(x) for x in v.values()), 'Unresolved regional values'
 PY
-# Refuse a mismatched Kubernetes context before creating anything.
-cluster_name=$("$python_bin" -c 'import json,sys; print(json.load(open(sys.argv[1]))["platform"]["value"]["cluster_name"])' "$terraform_output")
-context=$(kubectl config current-context)
-if [[ "$context" != *"cluster/$cluster_name" ]]; then
-  echo "Select the EKS context for $cluster_name before deploying (current: $context)." >&2
-  exit 2
-fi
 helm dependency build charts/operators
 helm dependency build charts/platform
-"$python_bin" scripts/bootstrap_crds.py
-kubectl apply --server-side -f build/bootstrap-crds.yaml
+"$python_bin" scripts/bootstrap_crds.py --operators-values "${values_file%.yaml}.operators.yaml"
+if [[ -s build/bootstrap-crds.yaml ]]; then
+  kubectl apply --server-side -f build/bootstrap-crds.yaml
+fi
 # Altinity CRDs have been canonicalized; its chart hook is disabled.
 helm upgrade --install operators charts/operators -n observability-system --create-namespace \
   --skip-crds --wait --timeout 15m -f "${values_file%.yaml}.operators.yaml"

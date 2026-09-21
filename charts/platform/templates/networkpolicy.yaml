@@ -10,8 +10,10 @@ spec:
     # The observability namespace is a trusted administrative boundary.
     - from:
         - podSelector: {}
+        {{- range .Values.networkPolicy.operatorNamespaces }}
         - namespaceSelector:
-            matchLabels: {kubernetes.io/metadata.name: observability-system}
+            matchLabels: {kubernetes.io/metadata.name: {{ . | quote }}}
+        {{- end }}
     - from:
         - namespaceSelector:
             matchLabels:

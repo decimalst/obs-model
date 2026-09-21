@@ -10,6 +10,11 @@ import json
 import secrets
 import subprocess
 
+try:
+    from .platform_config import load_platform
+except ImportError:
+    from platform_config import load_platform
+
 
 def command(args, data=None):
     return subprocess.run(args, input=data, capture_output=True, text=True, check=True).stdout
@@ -42,8 +47,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--terraform-output", required=True)
     args = parser.parse_args()
-    with open(args.terraform_output) as f:
-        platform = json.load(f)["platform"]["value"]
+    platform = load_platform(args.terraform_output)
+    if platform["secret_source"] == "existing":
+        print("Using pre-created Kubernetes secrets; no secrets were changed.")
+        return
 
     def aws_secret(arn):
         return command(

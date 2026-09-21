@@ -6,6 +6,11 @@ variable "name" {
   }
 }
 variable "region" { type = string }
+variable "existing_role_arns" {
+  description = "Optional externally managed mimir/tempo/flink Pod Identity role ARNs."
+  type        = map(string)
+  default     = {}
+}
 variable "vpc_cidr" { type = string }
 variable "availability_zones" {
   type = list(string)

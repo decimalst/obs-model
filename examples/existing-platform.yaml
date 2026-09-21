@@ -1,0 +1,27 @@
+# Software-only installation: existing infrastructure remains externally managed.
+# No passwords, tokens, kubeconfig, or access keys belong in this file.
+region: us-east-1
+cluster_name: my-existing-eks
+availability_zones: [us-east-1b, us-east-1d, us-east-1f]
+vpc_cidr: 10.20.0.0/16
+quota_redis_host: my-quota.example.cache.amazonaws.com
+buckets:
+  mimir-blocks: example-east-mimir-blocks
+  mimir-ruler: example-east-mimir-ruler
+  mimir-alertmanager: example-east-mimir-alertmanager
+  tempo: example-east-tempo
+role_arns:
+  mimir: arn:aws:iam::123456789012:role/existing-mimir
+  tempo: arn:aws:iam::123456789012:role/existing-tempo
+secret_source: existing
+storage_class: retained-encrypted-gp3
+create_storage_class: false
+# false = externally managed controller; true = install our pinned controller.
+operators:
+  cert-manager: false
+  argo-rollouts: true
+  strimzi-kafka-operator: true
+  opentelemetry-operator: true
+  altinity-clickhouse-operator: true
+  cluster-autoscaler: false
+  metrics-server: false

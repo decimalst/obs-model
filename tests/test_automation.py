@@ -24,6 +24,7 @@ class Automation(unittest.TestCase):
         platform = {
             "region": "us-west-2",
             "cluster_name": "olly-us-west-2",
+            "availability_zones": ["us-west-2a", "us-west-2b", "us-west-2c"],
             "quota_redis_host": "quota.us-west-2",
             "vpc_cidr": "10.41.0.0/16",
             "buckets": {

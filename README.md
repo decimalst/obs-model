@@ -53,7 +53,16 @@ Checks do not apply Terraform or create AWS resources. The integration test crea
 
 ## Deploy a region
 
-Follow [the runbook](docs/runbooks.md). Terraform planning/applying is a separate operator action. A private runner, AWS account, state bucket, administrative role, and published quota image digest are required. The deployment script checks its EKS context and uses existing AWS/Kubernetes secret mechanisms; it never embeds real credentials in example values.
+Already have EKS? Use the [existing-environment guide](docs/existing-clusters.md): bring an existing cluster and IAM roles, or reuse all AWS data services and install only the software. Controller and storage-class reuse are explicit, with a read-only preflight command before installation.
+
+```sh
+.venv/bin/python scripts/install.py --config build/existing.json \
+  --quota-image REGISTRY/log-quota@sha256:YOUR_PUBLISHED_DIGEST --check-only
+```
+
+Remove `--check-only` to install after prerequisites pass. The configuration can be Terraform output or the [software-only example](examples/existing-platform.yaml). Supply real AZs; the installer no longer assumes `a/b/c`.
+
+For a new region, follow [the runbook](docs/runbooks.md). Terraform planning/applying is a separate operator action. A private runner, AWS account, state bucket, administrative role, and published quota image digest are required. The installer checks the actual API endpoint and cluster identity and uses existing AWS/Kubernetes secret mechanisms; it never embeds real credentials in example values.
 
 Start with one region, pass live acceptance, then repeat for the second. Bulk telemetry stays in its originating region. There is no automatic cross-region ingestion failover or raw-data replication by default.
 

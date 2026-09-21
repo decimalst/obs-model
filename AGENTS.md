@@ -12,3 +12,4 @@ Build a regional AWS observability platform from the architecture in docs/archit
 - Run `make check`, `make terraform-test`, and `make runtime-test` for relevant changes. Record unavailable checks honestly; a rendered manifest is not a successful deployment.
 - Test failure cases, expiry boundaries, schema rejection, and routing/HA invariants. Never apply or destroy cloud infrastructure as part of validation.
 - Use `docs/runbooks.md` for deployment, promotion, regional failover, and teardown procedures. Changes to immutable/stateful resources require migration notes.
+- Preserve external ownership in existing-cluster installations: never adopt existing roles, controllers, CRDs, secrets or storage classes implicitly. Preflight is read-only, and `--check-only` must never invoke deployment. Preserve Terraform move declarations when refactoring managed resources.

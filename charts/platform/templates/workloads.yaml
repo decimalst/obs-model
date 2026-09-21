@@ -51,6 +51,11 @@ spec:
         prometheus.io/port: {{ if $otel }}"8888"{{ else if $vector }}"9090"{{ else }}"8080"{{ end }}
     spec:
       automountServiceAccountToken: false
+      {{- if eq $name "log-quota" }}
+      # The release workflow publishes amd64; keep mixed-architecture EKS safe.
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      {{- end }}
       terminationGracePeriodSeconds: {{ if $sampler }}120{{ else }}60{{ end }}
       securityContext:
         {{- include "olly.security" $ | nindent 8 }}

@@ -208,6 +208,9 @@
           "maximum": 100
         }
       }
+    },
+    "createStorageClass": {
+      "type": "boolean"
     }
   }
 }

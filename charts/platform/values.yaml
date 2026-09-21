@@ -1,6 +1,7 @@
 region: us-east-1
 clusterName: olly-us-east-1
 storageClass: gp3-encrypted
+createStorageClass: true
 images:
   vector: timberio/vector:0.54.0-debian
   otel: otel/opentelemetry-collector-contrib:0.148.0
@@ -49,6 +50,8 @@ rollouts:
   scaleDownDelaySeconds: 60
 networkPolicy:
   enabled: true
+  operatorNamespaces:
+  - observability-system
   clientNamespaceLabel: observability/collect
   vpcCIDR: 10.40.0.0/16
 flink:

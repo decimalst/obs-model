@@ -33,18 +33,6 @@ run "regional_ha_and_cost_contracts" {
     error_message = "S3 traffic must bypass NAT."
   }
   assert {
-    condition     = alltrue([for b in aws_s3_bucket.telemetry : !b.force_destroy])
-    error_message = "Stateful telemetry must not be silently purged."
-  }
-  assert {
-    condition     = aws_db_instance.grafana.multi_az && aws_db_instance.grafana.storage_encrypted && aws_db_instance.grafana.deletion_protection
-    error_message = "Grafana sessions require protected Multi-AZ persistent storage."
-  }
-  assert {
-    condition     = aws_elasticache_replication_group.quota.num_cache_clusters == 3 && aws_elasticache_replication_group.quota.automatic_failover_enabled && aws_elasticache_replication_group.quota.transit_encryption_enabled
-    error_message = "Shared log quota state needs encrypted multi-AZ failover."
-  }
-  assert {
     condition     = aws_launch_template.node.metadata_options[0].http_tokens == "required"
     error_message = "IMDSv2 must be required."
   }

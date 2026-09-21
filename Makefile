@@ -32,10 +32,16 @@ schemas: render
 	$(KUBECONFORM) -strict -summary -kubernetes-version 1.35.0 -ignore-missing-schemas build/platform.yaml build/operators.yaml build/debug-grants.yaml build/flink-operator.yaml
 check: lint test schemas
 terraform-init:
+	terraform -chdir=terraform/modules/platform-services init -backend=false
+	terraform -chdir=terraform/live/existing-cluster init -backend=false
 	terraform -chdir=terraform/modules/region init -backend=false
 	terraform -chdir=terraform/live/us-east-1 init -backend=false
 	terraform -chdir=terraform/live/us-west-2 init -backend=false
 terraform-test:
+	terraform -chdir=terraform/modules/platform-services validate
+	terraform -chdir=terraform/modules/platform-services test
+	terraform -chdir=terraform/live/existing-cluster validate
+	terraform -chdir=terraform/live/existing-cluster test
 	terraform -chdir=terraform/modules/region validate
 	terraform -chdir=terraform/modules/region test
 	terraform -chdir=terraform/live/us-east-1 validate

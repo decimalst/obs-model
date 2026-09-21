@@ -2,6 +2,8 @@
 
 ## Bootstrap and deploy
 
+For existing EKS, IAM roles, controllers, storage classes or data services, use [the existing-environment guide](existing-clusters.md). That path has a different ownership boundary and does not create or adopt the cluster.
+
 Deployment also requires AWS CLI v2, kubectl compatible with EKS 1.35, and the Argo Rollouts kubectl plugin compatible with controller 1.10.0. The private runner must have API network access as well as the configured EKS access entry.
 
 1. Choose the first region and verify three usable AZs, EKS/EC2/RDS/ElastiCache quotas, and the baseline cost. The example roots use `a/b/c`; account-specific AZ letters may map to different physical zones. Region CIDRs do not overlap.
@@ -20,10 +22,10 @@ terraform -chdir=terraform/live/us-east-1 output -json > build/us-east-1.terrafo
 5. Publish the quota image to a registry accessible by worker nodes (the manual workflow publishes an amd64 image to GHCR; use ECR or add a pull secret for private GHCR). Use the immutable registry digest in generated values:
 
 ```sh
-python3 scripts/regional_values.py --terraform-output build/us-east-1.terraform.json \
-  --quota-image REGISTRY/log-quota@sha256:YOUR_PUBLISHED_DIGEST --output build/us-east-1.yaml
 aws eks update-kubeconfig --region us-east-1 --name olly-us-east-1
-scripts/deploy.sh build/us-east-1.yaml build/us-east-1.terraform.json
+.venv/bin/python scripts/install.py --config build/us-east-1.terraform.json \
+  --quota-image REGISTRY/log-quota@sha256:YOUR_PUBLISHED_DIGEST --check-only
+# Remove --check-only to install after the read-only checks and local render pass.
 ```
 
 `deploy.sh` prepares CRDs, installs controllers before custom resources, fetches RDS/Valkey credentials from Secrets Manager, preserves existing generated Grafana/ClickHouse credentials, and installs the regional platform. It never runs Terraform apply. There is no public load balancer. Access Grafana by private port-forward during acceptance, then add an authenticated HTTPS front door appropriate to your organization. `cookie_secure` assumes HTTPS for routine browser use.

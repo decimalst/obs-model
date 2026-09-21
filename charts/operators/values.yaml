@@ -1,3 +1,11 @@
+components:
+  cert-manager: true
+  argo-rollouts: true
+  strimzi-kafka-operator: true
+  opentelemetry-operator: true
+  altinity-clickhouse-operator: true
+  cluster-autoscaler: true
+  metrics-server: true
 cert-manager:
   crds:
     enabled: true

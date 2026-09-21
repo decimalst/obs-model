@@ -6,6 +6,7 @@ only those nonsemantic duplicates in that pinned dependency, then emit canonical
 JSON/YAML. Conflicting schema keys always fail; all other packages are strict.
 """
 
+import argparse
 import pathlib
 import tarfile
 
@@ -41,7 +42,7 @@ class AltinityLoader(UniqueLoader):
     allow_altinity_annotations = True
 
 
-def packaged_crds():
+def packaged_crds(enabled=None):
     result = []
     for archive in sorted((ROOT / "charts/operators/charts").glob("*.tgz")):
         loader = (
@@ -50,6 +51,14 @@ def packaged_crds():
             else UniqueLoader
         )
         with tarfile.open(archive) as chart:
+            metadata = next(
+                m
+                for m in chart.getmembers()
+                if m.name.count("/") == 1 and m.name.endswith("/Chart.yaml")
+            )
+            chart_name = yaml.safe_load(chart.extractfile(metadata).read())["name"]
+            if enabled is not None and not enabled.get(chart_name, True):
+                continue
             for item in chart.getmembers():
                 parts = pathlib.PurePosixPath(item.name).parts
                 if len(parts) >= 3 and parts[1] == "crds" and item.name.endswith((".yaml", ".yml")):
@@ -60,9 +69,17 @@ def packaged_crds():
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--operators-values", type=pathlib.Path)
+    args = parser.parse_args()
+    enabled = (
+        yaml.safe_load(args.operators_values.read_text()).get("components", {})
+        if args.operators_values
+        else None
+    )
     path = ROOT / "build/bootstrap-crds.yaml"
     path.parent.mkdir(exist_ok=True)
-    path.write_text(yaml.safe_dump_all(packaged_crds(), sort_keys=False))
+    path.write_text(yaml.safe_dump_all(packaged_crds(enabled), sort_keys=False))
     print(
         f"Prepared {path}; apply server-side before installing/upgrading operators with --skip-crds"
     )

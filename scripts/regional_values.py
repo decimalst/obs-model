@@ -2,11 +2,15 @@
 """Generate region coordinates from nonsensitive Terraform outputs."""
 
 import argparse
-import json
 import pathlib
 import re
 
 import yaml
+
+try:
+    from .platform_config import OPERATORS, load_platform
+except ImportError:
+    from platform_config import OPERATORS, load_platform
 
 
 def values(platform, quota_image):
@@ -14,15 +18,29 @@ def values(platform, quota_image):
     if not re.fullmatch(r".+@sha256:[a-f0-9]{64}", quota_image):
         raise ValueError("Use the published log-quota image digest, not a mutable tag")
     zones = [
-        {"name": z, "nodeSelector": {"topology.kubernetes.io/zone": region + z}} for z in "abc"
+        {"name": name, "nodeSelector": {"topology.kubernetes.io/zone": az}}
+        for name, az in zip("abc", platform["availability_zones"], strict=True)
     ]
     buckets = platform["buckets"]
     return {
         "region": region,
         "clusterName": platform["cluster_name"],
+        "storageClass": platform.get("storage_class", "gp3-encrypted"),
+        "createStorageClass": platform.get("create_storage_class", True),
         "images": {"quota": quota_image},
         "quota": {"redisAddress": platform["quota_redis_host"] + ":6379"},
-        "networkPolicy": {"vpcCIDR": platform["vpc_cidr"]},
+        "networkPolicy": {
+            "vpcCIDR": platform["vpc_cidr"],
+            "operatorNamespaces": platform.get("operator_namespaces", ["observability-system"]),
+        },
+        "grafana": {
+            "grafana.ini": {
+                "database": {
+                    "name": platform.get("grafana_db_name", "grafana"),
+                    "user": platform.get("grafana_db_user", "grafana"),
+                }
+            }
+        },
         "mimir": {
             "mimir": {
                 "structuredConfig": {
@@ -37,8 +55,13 @@ def values(platform, quota_image):
                 }
             },
             **{
-                key: {"zoneAwareReplication": {"zones": zones}}
-                for key in ["ingester", "store_gateway", "alertmanager"]
+                key: {
+                    **({"zoneAwareReplication": {"zones": zones}} if key != "compactor" else {}),
+                    "persistentVolume": {
+                        "storageClass": platform.get("storage_class", "gp3-encrypted")
+                    },
+                }
+                for key in ["ingester", "store_gateway", "alertmanager", "compactor"]
             },
         },
         "tempo": {
@@ -51,7 +74,20 @@ def values(platform, quota_image):
                     }
                 }
             },
-            "ingester": {"zoneAwareReplication": {"zones": zones}},
+            "ingester": {
+                "zoneAwareReplication": {"zones": zones},
+                "persistence": {"storageClass": platform.get("storage_class", "gp3-encrypted")},
+            },
+        },
+    }
+
+
+def operator_values(platform):
+    return {
+        "components": {name: platform.get("operators", {}).get(name, True) for name in OPERATORS},
+        "cluster-autoscaler": {
+            "awsRegion": platform["region"],
+            "autoDiscovery": {"clusterName": platform["cluster_name"]},
         },
     }
 
@@ -62,20 +98,11 @@ def main():
     p.add_argument("--quota-image", required=True)
     p.add_argument("--output", type=pathlib.Path, required=True)
     args = p.parse_args()
-    platform = json.loads(args.terraform_output.read_text())["platform"]["value"]
+    platform = load_platform(args.terraform_output)
     result = values(platform, args.quota_image)
     args.output.parent.mkdir(exist_ok=True, parents=True)
     args.output.write_text(yaml.safe_dump(result, sort_keys=False))
-    args.output.with_suffix(".operators.yaml").write_text(
-        yaml.safe_dump(
-            {
-                "cluster-autoscaler": {
-                    "awsRegion": platform["region"],
-                    "autoDiscovery": {"clusterName": platform["cluster_name"]},
-                }
-            }
-        )
-    )
+    args.output.with_suffix(".operators.yaml").write_text(yaml.safe_dump(operator_values(platform)))
     print(f"Wrote regional values to {args.output}")
 
 
