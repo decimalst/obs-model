@@ -196,6 +196,26 @@ def main():
                 "-v",
                 f"{ROOT}/build/configs/{role}/vector.yaml:/etc/vector/vector.yaml:ro",
             )
+        # Use the chart's actual integer environment strings, then lower only
+        # event budgets for the bounded flood fixture.
+        quota_workload = next(
+            d
+            for d in yaml.safe_load_all((ROOT / "build/platform.yaml").read_text())
+            if d and d["kind"] == "Rollout" and d["metadata"]["name"] == "log-quota"
+        )
+        rendered_env = quota_workload["spec"]["template"]["spec"]["containers"][0]["env"]
+        quota_env = {
+            e["name"]: e["value"]
+            for e in rendered_env
+            if "value" in e and (e["name"].endswith("PER_SECOND") or e["name"].endswith("BURST"))
+        }
+        quota_env.update(
+            EVENTS_PER_SECOND="1",
+            EVENT_BURST="5",
+            DEBUG_EVENTS_PER_SECOND="1",
+            DEBUG_EVENT_BURST="2",
+        )
+        quota_args = [arg for k, v in quota_env.items() for arg in ["-e", f"{k}={v}"]]
         quota = start(
             "log-quota",
             "observability/log-quota:0.1.0",
@@ -205,14 +225,7 @@ def main():
             "REDIS_TLS=false",
             "-e",
             "VECTOR_URL=http://vector-gateway:8080",
-            "-e",
-            "EVENTS_PER_SECOND=1",
-            "-e",
-            "EVENT_BURST=5",
-            "-e",
-            "DEBUG_EVENTS_PER_SECOND=1",
-            "-e",
-            "DEBUG_EVENT_BURST=2",
+            *quota_args,
             "-p",
             "127.0.0.1::8080",
         )

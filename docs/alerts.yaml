@@ -1,3 +1,4 @@
+# Legacy example only. Deployed source: charts/platform/files/rules/platform.yaml
 name: observability-protection
 rules:
   - alert: LogAdmissionDependencyUnavailable

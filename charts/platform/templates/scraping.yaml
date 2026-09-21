@@ -34,7 +34,7 @@ metadata:
   name: otel-scrape
 spec:
   mode: statefulset
-  replicas: 3
+  replicas: {{ .Values.scaling.scrapeReplicas }}
   image: {{ .Values.images.otel }}
   serviceAccount: otel-scrape
   targetAllocator:
@@ -43,8 +43,7 @@ spec:
     podDisruptionBudget:
       minAvailable: 1
     resources:
-      requests: {cpu: 100m, memory: 128Mi}
-      limits: {cpu: "1", memory: 512Mi}
+      {{- toYaml .Values.resources.targetAllocator | nindent 6 }}
     affinity:
       podAntiAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
@@ -57,8 +56,7 @@ spec:
     prometheusCR:
       enabled: false
   resources:
-    requests: {cpu: 100m, memory: 256Mi}
-    limits: {cpu: "1", memory: 512Mi}
+    {{- toYaml .Values.resources.scrape | nindent 4 }}
   topologySpreadConstraints:
     - maxSkew: 1
       topologyKey: topology.kubernetes.io/zone
@@ -73,11 +71,11 @@ spec:
           scrape_configs:
             - job_name: annotated-pods
               scrape_interval: {{ .Values.collectors.scrapeInterval }}
-              scrape_timeout: 10s
+              scrape_timeout: {{ .Values.collectors.scrapeTimeout }}
               sample_limit: {{ .Values.collectors.scrapeSampleLimit }}
-              label_limit: 40
-              label_name_length_limit: 128
-              label_value_length_limit: 512
+              label_limit: {{ .Values.mimir.mimir.structuredConfig.limits.max_label_names_per_series }}
+              label_name_length_limit: {{ .Values.mimir.mimir.structuredConfig.limits.max_label_name_length }}
+              label_value_length_limit: {{ .Values.mimir.mimir.structuredConfig.limits.max_label_value_length }}
               kubernetes_sd_configs:
                 - role: pod
                   namespaces:
@@ -102,21 +100,23 @@ spec:
                 - source_labels: [__meta_kubernetes_namespace]
                   target_label: namespace
               metric_relabel_configs:
-                - action: labeldrop
-                  regex: '(debug_.*|user_id|request_id|session_id)'
+                {{- toYaml .Values.mimir.mimir.structuredConfig.limits.metric_relabel_configs | nindent 16 }}
     processors:
       memory_limiter:
         check_interval: 1s
         limit_percentage: 75
         spike_limit_percentage: 15
-      batch: {}
+      batch:
+        {{- include "olly.batch" . | nindent 8 }}
     exporters:
-      otlp:
+      {{ include "olly.interconnect" . }}:
         endpoint: otel-metrics:4317
         tls: {insecure: true}
+        {{- include "olly.interconnectQueue" . | nindent 8 }}
+        {{- include "olly.arrowExport" . | nindent 8 }}
     service:
       pipelines:
         metrics:
           receivers: [prometheus]
           processors: [memory_limiter, batch]
-          exporters: [otlp]
+          exporters: [{{ include "olly.interconnect" . }}]

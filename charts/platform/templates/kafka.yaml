@@ -13,8 +13,7 @@ spec:
     class: {{ .Values.storageClass }}
     deleteClaim: false
   resources:
-    requests: {cpu: "500m", memory: 2Gi}
-    limits: {cpu: "2", memory: 4Gi}
+    {{- toYaml .Values.resources.kafka | nindent 4 }}
   template:
     pod:
       affinity:
@@ -64,10 +63,39 @@ metadata:
   labels:
     strimzi.io/cluster: telemetry
 spec:
-  partitions: {{ if eq $topic "logs" }}12{{ else }}1{{ end }}
+  partitions: {{ if eq $topic "logs" }}{{ $.Values.scaling.logPartitions }}{{ else }}{{ $.Values.scaling.metricsPartitions }}{{ end }}
   replicas: 3
   config:
     min.insync.replicas: 2
     retention.ms: {{ mul $.Values.logs.kafkaRetentionHours 3600000 | quote }}
     compression.type: producer
+{{- end }}
+
+{{- if gt (int .Values.scaling.extraKafkaBrokers) 0 }}
+---
+# Expand data capacity without resizing the three-voter controller quorum.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: data
+  labels:
+    strimzi.io/cluster: telemetry
+spec:
+  replicas: {{ .Values.scaling.extraKafkaBrokers }}
+  roles: [broker]
+  storage:
+    type: persistent-claim
+    size: {{ .Values.logs.kafkaStorage }}
+    class: {{ .Values.storageClass }}
+    deleteClaim: false
+  resources:
+    {{- toYaml .Values.resources.kafka | nindent 4 }}
+  template:
+    pod:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels: {strimzi.io/cluster: telemetry, strimzi.io/pool-name: data}
 {{- end }}

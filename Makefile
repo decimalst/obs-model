@@ -53,3 +53,10 @@ image:
 .PHONY: integration-test
 integration-test:
 	$(PYTHON) scripts/integration_test.py
+.PHONY: collector-test
+collector-test:
+	$(PYTHON) scripts/collector_test.py
+.PHONY: rules-test
+rules-test:
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml

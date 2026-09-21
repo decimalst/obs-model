@@ -1,0 +1,43 @@
+{{- $c := .Values.collectors -}}
+{{- if gt (int $c.batchSize) (int $c.batchMaxSize) -}}
+{{- fail "collectors.batchSize must not exceed batchMaxSize" -}}
+{{- end -}}
+{{- if gt (int (trimSuffix "s" $c.scrapeTimeout)) (int (trimSuffix "s" $c.scrapeInterval)) -}}
+{{- fail "collectors.scrapeTimeout must not exceed scrapeInterval" -}}
+{{- end -}}
+{{- if ne (int (add $c.traceErrorAllocation $c.traceSlowAllocation $c.traceBaselineAllocation)) 100 -}}
+{{- fail "trace allocations must sum to 100" -}}
+{{- end -}}
+{{- range $pair := list (list "debugEventsPerSecond" "eventsPerSecond") (list "debugEventBurst" "eventBurst") (list "debugBytesPerSecond" "bytesPerSecond") (list "debugByteBurst" "byteBurst") -}}
+{{- if gt (int (index $.Values.quota (index $pair 0))) (int (index $.Values.quota (index $pair 1))) -}}
+{{- fail "debug quota must fit within the total quota" -}}
+{{- end -}}
+{{- end -}}
+
+{{- if lt (int $c.arrowQueueItems) (int $c.batchMaxSize) -}}
+{{- fail "arrowQueueItems must hold at least batchMaxSize items" -}}
+{{- end -}}
+{{- if gt (int .Values.scaling.writerReplicas) (int .Values.scaling.logPartitions) -}}
+{{- fail "writerReplicas cannot exceed logPartitions" -}}
+{{- end -}}
+{{- if lt (int .Values.mimir.ingester.replicas) (mul 3 (int .Values.scaling.metricsPartitions)) -}}
+{{- fail "Mimir needs at least 3 ingester replicas per metrics partition (one per AZ)" -}}
+{{- end -}}
+
+{{- if and .Values.autoscaling.enabled (gt (int .Values.scaling.writerReplicas) (int .Values.autoscaling.maxReplicas)) -}}
+{{- fail "writerReplicas cannot exceed the HPA maximum" -}}
+{{- end -}}
+
+{{- range $role, $resource := .Values.resources -}}
+{{- $cpuRequest := mul (int $resource.requests.cpu) 1000 -}}
+{{- $cpuLimit := mul (int $resource.limits.cpu) 1000 -}}
+{{- if hasSuffix "m" $resource.requests.cpu }}{{- $cpuRequest = int (trimSuffix "m" $resource.requests.cpu) }}{{- end -}}
+{{- if hasSuffix "m" $resource.limits.cpu }}{{- $cpuLimit = int (trimSuffix "m" $resource.limits.cpu) }}{{- end -}}
+{{- $memoryRequest := int (trimSuffix "Mi" $resource.requests.memory) -}}
+{{- $memoryLimit := int (trimSuffix "Mi" $resource.limits.memory) -}}
+{{- if hasSuffix "Gi" $resource.requests.memory }}{{- $memoryRequest = mul 1024 (int (trimSuffix "Gi" $resource.requests.memory)) }}{{- end -}}
+{{- if hasSuffix "Gi" $resource.limits.memory }}{{- $memoryLimit = mul 1024 (int (trimSuffix "Gi" $resource.limits.memory)) }}{{- end -}}
+{{- if or (gt (int $cpuRequest) (int $cpuLimit)) (gt (int $memoryRequest) (int $memoryLimit)) -}}
+{{- fail (printf "resources.%s requests must fit within limits" $role) -}}
+{{- end -}}
+{{- end -}}

@@ -1,5 +1,5 @@
 {{- if .Values.autoscaling.enabled }}
-{{- range $name := list "log-quota" "vector-gateway" "otel-router" "otel-metrics" }}
+{{- range $name := list "log-quota" "vector-gateway" "otel-router" "otel-metrics" "vector-writer" }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -7,11 +7,11 @@ metadata:
   name: {{ $name }}
 spec:
   scaleTargetRef:
-    apiVersion: {{ if $.Values.rollouts.enabled }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
-    kind: {{ if $.Values.rollouts.enabled }}Rollout{{ else }}Deployment{{ end }}
+    apiVersion: {{ if and $.Values.rollouts.enabled (ne $name "vector-writer") }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
+    kind: {{ if and $.Values.rollouts.enabled (ne $name "vector-writer") }}Rollout{{ else }}Deployment{{ end }}
     name: {{ $name }}
-  minReplicas: 3
-  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  minReplicas: {{ if eq $name "vector-writer" }}{{ $.Values.scaling.writerReplicas }}{{ else }}3{{ end }}
+  maxReplicas: {{ if eq $name "vector-writer" }}{{ min $.Values.autoscaling.maxReplicas $.Values.scaling.logPartitions }}{{ else }}{{ $.Values.autoscaling.maxReplicas }}{{ end }}
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300

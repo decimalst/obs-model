@@ -10,7 +10,7 @@ Vector gateways acknowledge only after Kafka accepts writes with `acks=all`; Kaf
 
 This adds a small Go admission service to the reference design because Vector's throttle state is local to a process. Local throttles alone do not enforce shared quotas when gateways scale. The quota store uses `noeviction`; exhausted memory fails admission closed rather than silently resetting tokens. The shared store itself requires capacity planning and is a regional dependency. Its failover is asynchronous and can restore slightly stale token state; a failover may admit an additional burst. This is traffic protection, not an exact billing ledger.
 
-Applications live outside the trusted `observability` namespace. Network policies admit application traffic only to OTLP ports; log gateways, Kafka, databases, and quota endpoints remain internal to administrators and collectors. Labels and grant annotations are platform-controlled metadata. This baseline is not hardened multi-tenant hosting: do not grant untrusted users pod creation/exec privileges inside the platform namespace or permission to forge service labels/debug grants. Plaintext intra-cluster OTLP/Kafka/ClickHouse is confined to that trust boundary. Install authenticated TLS ingress/service-mesh mTLS before admitting untrusted or external clients.
+Applications live outside the trusted `observability` namespace. Network policies admit application traffic only to the node agents' OTLP ports; log gateways, Kafka, databases, and quota endpoints remain internal to administrators and collectors. Labels and grant annotations are platform-controlled metadata. This baseline is not hardened multi-tenant hosting: do not grant untrusted users pod creation/exec privileges inside the platform namespace or permission to forge service labels/debug grants. Plaintext intra-cluster OTLP/Kafka/ClickHouse is confined to that trust boundary. Install authenticated TLS ingress/service-mesh mTLS before admitting untrusted or external clients.
 
 ## Metrics and traces
 
@@ -49,3 +49,7 @@ Flink is optional because a business-specific job is not inferable from the diag
 - [EKS supported Kubernetes versions](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html)
 
 The diagram was treated as reference data, not as deployment instructions. See `Chart.lock`, Terraform provider lock files, and the pinned container versions for the exact implementation inputs.
+
+## Reconciliation and interconnects
+
+[GitOps](gitops.md) makes this repository the desired state for pipeline configuration and Grafana/Mimir content. [The adversarial review](adversarial-review.md) records fixed flaws and explicit limits. [Scaling operations](scaling.md) distinguishes elastic tiers from quorum, partition and trace-state migrations. Compatible agent/scrape links use OTel Arrow by default; trace-aware routing and Tempo export retain OTLP.

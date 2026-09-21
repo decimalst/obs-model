@@ -13,3 +13,7 @@ Build a regional AWS observability platform from the architecture in docs/archit
 - Test failure cases, expiry boundaries, schema rejection, and routing/HA invariants. Never apply or destroy cloud infrastructure as part of validation.
 - Use `docs/runbooks.md` for deployment, promotion, regional failover, and teardown procedures. Changes to immutable/stateful resources require migration notes.
 - Preserve external ownership in existing-cluster installations: never adopt existing roles, controllers, CRDs, secrets or storage classes implicitly. Preflight is read-only, and `--check-only` must never invoke deployment. Preserve Terraform move declarations when refactoring managed resources.
+
+- GitOps reconciles regional Helm releases and file-provisioned content. Preserve existing release names/storage namespaces and controller ownership. Scope drift exceptions to controller-owned fields; never ignore entire workload specs.
+- Pipeline changes need representative input/output tests. Run `make collector-test` for Arrow, routing or cardinality changes and `make rules-test` for alert/recording rules. Keep Mimir metric drop policy and edge filters consistent; dropping labels is not aggregation.
+- Never claim replicas add ClickHouse write shards or that broker additions rebalance partitions. Document trace drains, partition activation, rule-source migrations and ClickHouse TTL alterations explicitly.

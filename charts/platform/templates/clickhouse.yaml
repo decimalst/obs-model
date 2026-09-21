@@ -56,8 +56,7 @@ spec:
             tcpSocket: {port: client}
             initialDelaySeconds: 30
           resources:
-            requests: {cpu: 100m, memory: 256Mi}
-            limits: {cpu: "1", memory: 1Gi}
+            {{- toYaml .Values.resources.keeper | nindent 12 }}
           volumeMounts:
             - {name: config, mountPath: /conf, readOnly: true}
             - {name: data, mountPath: /var/lib/clickhouse-keeper}
@@ -153,8 +152,7 @@ spec:
             - name: clickhouse
               image: {{ .Values.images.clickhouse }}
               resources:
-                requests: {cpu: "500m", memory: 2Gi}
-                limits: {cpu: "2", memory: 4Gi}
+                {{- toYaml .Values.resources.clickhouse | nindent 16 }}
     volumeClaimTemplates:
       - name: data
         reclaimPolicy: Retain

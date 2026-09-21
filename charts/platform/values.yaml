@@ -30,6 +30,9 @@ logs:
   clickhouseStorage: 100Gi
   secretName: clickhouse-auth
   maxDebugHours: 24
+  agentBufferBytes: 536870912
+  gatewayBufferEvents: 2048
+  writerBufferEvents: 4096
 collectors:
   replicas: 3
   traceSamplingPercent: 10
@@ -40,6 +43,27 @@ collectors:
   scrapeSampleLimit: 10000
   scrapeNamespaces:
   - observability
+  interconnect: arrow
+  arrowStreams: 1
+  arrowQueueItems: 32768
+  arrowMemoryMiB: 64
+  arrowRequestMiB: 32
+  arrowWaitingMiB: 8
+  queueSize: 256
+  queueConsumers: 4
+  batchSize: 512
+  batchMaxSize: 1024
+  batchTimeout: 1s
+  maxReceiveMiB: 4
+  maxConcurrentStreams: 64
+  traceExpectedPerSecond: 1000
+  traceDecisionCache: 100000
+  traceSlowMilliseconds: 1000
+  traceErrorAllocation: 50
+  traceSlowAllocation: 25
+  traceBaselineAllocation: 25
+  scrapeTimeout: 10s
+  requireMetricIdentity: true
 autoscaling:
   enabled: true
   maxReplicas: 12
@@ -87,6 +111,9 @@ mimir:
       ruler_storage:
         s3:
           bucket_name: REPLACE-mimir-ruler
+        backend: local
+        local:
+          directory: /etc/mimir/git-rules
       alertmanager_storage:
         s3:
           bucket_name: REPLACE-mimir-alertmanager
@@ -102,6 +129,40 @@ mimir:
         max_global_series_per_user: 1000000
         compactor_blocks_retention_period: 15d
         max_query_parallelism: 16
+        max_global_series_per_metric: 50000
+        max_label_names_per_series: 40
+        max_label_name_length: 128
+        max_label_value_length: 512
+        max_fetched_series_per_query: 100000
+        max_fetched_chunk_bytes_per_query: 536870912
+        out_of_order_time_window: 2m
+        max_query_lookback: 15d
+        metric_relabel_configs:
+        - action: drop
+          source_labels:
+          - user_id
+          - user_email
+          - enduser_id
+          - request_id
+          - session_id
+          - trace_id
+          - span_id
+          - http_url
+          - http_target
+          - url_full
+          - url_path
+          - url_query
+          - db_statement
+          - db_query_text
+          - exception_message
+          - exception_stacktrace
+          - container_id
+          - pod_template_hash
+          separator: ''
+          regex: .+
+      ruler:
+        enable_api: false
+        poll_interval: 1m
   ingester:
     replicas: 3
     zoneAwareReplication:
@@ -156,6 +217,17 @@ mimir:
     replicas: 2
   ruler:
     replicas: 2
+    extraVolumes:
+    - name: git-rules
+      configMap:
+        name: olly-rules
+        items:
+        - key: platform.yaml
+          path: platform/platform.yaml
+    extraVolumeMounts:
+    - name: git-rules
+      mountPath: /etc/mimir/git-rules
+      readOnly: true
   gateway:
     replicas: 2
   nginx:
@@ -294,45 +366,87 @@ grafana:
         orgId: 1
         folder: Platform
         type: file
-        disableDeletion: true
+        disableDeletion: false
         options:
           path: /var/lib/grafana/dashboards/default
-  dashboards:
-    default:
-      regional-overview:
-        json: "{\n  \"uid\": \"regional-overview\",\n  \"title\": \"Regional observability\
-          \ health\",\n  \"schemaVersion\": 39,\n  \"version\": 1,\n  \"refresh\"\
-          : \"30s\",\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\
-          \n  },\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Admitted\
-          \ log events / second\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
-          : {\n        \"type\": \"prometheus\",\n        \"uid\": \"mimir\"\n   \
-          \   },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n   \
-          \     \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n   \
-          \     {\n          \"expr\": \"sum(rate(log_quota_accepted_total[5m]))\"\
-          ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n     \
-          \ \"id\": 2,\n      \"title\": \"Log events intentionally dropped / second\"\
-          ,\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"\
-          type\": \"prometheus\",\n        \"uid\": \"mimir\"\n      },\n      \"\
-          gridPos\": {\n        \"x\": 12,\n        \"y\": 0,\n        \"w\": 12,\n\
-          \        \"h\": 8\n      },\n      \"targets\": [\n        {\n         \
-          \ \"expr\": \"sum(rate(log_quota_dropped_total[5m]))\",\n          \"refId\"\
-          : \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 3,\n      \"title\"\
-          : \"Log admission dependency failures / second\",\n      \"type\": \"timeseries\"\
-          ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"\
-          uid\": \"mimir\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n  \
-          \      \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n     \
-          \ \"targets\": [\n        {\n          \"expr\": \"sum(rate(log_quota_unavailable_total[5m]))\"\
-          ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n     \
-          \ \"id\": 4,\n      \"title\": \"OTel refused metric points / second\",\n\
-          \      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\"\
-          : \"prometheus\",\n        \"uid\": \"mimir\"\n      },\n      \"gridPos\"\
-          : {\n        \"x\": 12,\n        \"y\": 8,\n        \"w\": 12,\n       \
-          \ \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\"\
-          : \"sum(rate(otelcol_processor_refused_metric_points[5m]))\",\n        \
-          \  \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 5,\n\
-          \      \"title\": \"OTel refused spans / second\",\n      \"type\": \"timeseries\"\
-          ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"\
-          uid\": \"mimir\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n  \
-          \      \"y\": 16,\n        \"w\": 12,\n        \"h\": 8\n      },\n    \
-          \  \"targets\": [\n        {\n          \"expr\": \"sum(rate(otelcol_processor_refused_spans[5m]))\"\
-          ,\n          \"refId\": \"A\"\n        }\n      ]\n    }\n  ]\n}"
+        allowUiUpdates: false
+        updateIntervalSeconds: 10
+  dashboardsConfigMaps:
+    default: olly-dashboards
+scaling:
+  writerReplicas: 3
+  scrapeReplicas: 3
+  extraKafkaBrokers: 0
+  logPartitions: 12
+  metricsPartitions: 1
+resources:
+  agents:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  gateways:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: '2'
+      memory: 1Gi
+  samplers:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: '2'
+      memory: 2Gi
+  writers:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: '2'
+      memory: 1Gi
+  quota:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: '2'
+      memory: 1Gi
+  scrape:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  targetAllocator:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: '1'
+      memory: 512Mi
+  kafka:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: '2'
+      memory: 4Gi
+  clickhouse:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: '2'
+      memory: 4Gi
+  keeper:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: '1'
+      memory: 1Gi

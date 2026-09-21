@@ -1,4 +1,8 @@
 {{- range $role := list "agent" "metrics" "router" "traces" }}
+{{- $receiver := "otlp" }}
+{{- if or (eq $role "metrics") (eq $role "router") }}
+{{- $receiver = include "olly.interconnect" $ }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -10,17 +14,37 @@ data:
       health_check:
         endpoint: 0.0.0.0:13133
     receivers:
-      otlp:
+      {{ $receiver }}:
+        {{- if eq $receiver "otelarrow" }}
+        admission:
+          request_limit_mib: {{ $.Values.collectors.arrowRequestMiB | int }}
+          waiting_limit_mib: {{ $.Values.collectors.arrowWaitingMiB | int }}
+        {{- end }}
         protocols:
+          {{- if eq $receiver "otelarrow" }}
+          arrow:
+            memory_limit_mib: {{ $.Values.collectors.arrowMemoryMiB | int }}
+            zstd:
+              memory_limit_mib: {{ $.Values.collectors.arrowMemoryMiB | int }}
+          {{- end }}
           grpc:
             endpoint: 0.0.0.0:4317
-            max_recv_msg_size_mib: 4
-            max_concurrent_streams: 64
+            max_recv_msg_size_mib: {{ $.Values.collectors.maxReceiveMiB | int }}
+            max_concurrent_streams: {{ $.Values.collectors.maxConcurrentStreams | int }}
+            keepalive:
+              server_parameters:
+                max_connection_age: 60s
+                max_connection_age_grace: 45s
+    {{- if eq $receiver "otelarrow" }}
+      otlp/http:
+        protocols:
+    {{- end }}
           http:
             endpoint: 0.0.0.0:4318
+            max_request_body_size: {{ mul $.Values.collectors.maxReceiveMiB 1048576 }}
     {{- if eq $role "agent" }}
       kubeletstats:
-        collection_interval: 30s
+        collection_interval: {{ $.Values.collectors.scrapeInterval }}
         auth_type: serviceAccount
         endpoint: https://${env:K8S_NODE_NAME}:10250
         insecure_skip_verify: false
@@ -32,9 +56,7 @@ data:
         limit_percentage: 75
         spike_limit_percentage: 15
       batch:
-        timeout: 1s
-        send_batch_size: 512
-        send_batch_max_size: 1024
+        {{- include "olly.batch" $ | nindent 8 }}
       resource:
         attributes:
           - key: cloud.region
@@ -43,14 +65,29 @@ data:
           - key: k8s.cluster.name
             value: {{ $.Values.clusterName }}
             action: upsert
+    {{- if or (eq $role "agent") (eq $role "metrics") }}
+      filter/cardinality:
+        {{- include "olly.metricFilter" $ | nindent 8 }}
+    {{- end }}
+    {{- if eq $role "metrics" }}
+      transform/identity:
+        error_mode: propagate
+        metric_statements:
+          - context: datapoint
+            statements:
+              # Fixed resource allowlist. Keep writer identity; never export arbitrary metadata.
+              {{- range $key := list "cloud.region" "k8s.cluster.name" "k8s.namespace.name" "k8s.node.name" "k8s.pod.uid" "k8s.container.name" }}
+              - 'set(attributes[{{ replace "." "_" $key | toJson }}], resource.attributes[{{ $key | toJson }}]) where resource.attributes[{{ $key | toJson }}] != nil'
+              {{- end }}
+    {{- end }}
     {{- if eq $role "traces" }}
       tail_sampling:
         decision_wait: {{ $.Values.collectors.traceDecisionWaitSeconds }}s
         num_traces: {{ $.Values.collectors.maxTraces }}
-        expected_new_traces_per_sec: 1000
+        expected_new_traces_per_sec: {{ $.Values.collectors.traceExpectedPerSecond | int }}
         decision_cache:
-          sampled_cache_size: 100000
-          non_sampled_cache_size: 100000
+          sampled_cache_size: {{ $.Values.collectors.traceDecisionCache | int }}
+          non_sampled_cache_size: {{ $.Values.collectors.traceDecisionCache | int }}
         policies:
           - name: bounded-priority
             type: composite
@@ -65,37 +102,40 @@ data:
                 - name: slow
                   type: latency
                   latency:
-                    threshold_ms: 1000
+                    threshold_ms: {{ $.Values.collectors.traceSlowMilliseconds | int }}
                 - name: baseline
                   type: probabilistic
                   probabilistic:
                     sampling_percentage: {{ $.Values.collectors.traceSamplingPercent }}
               rate_allocation:
                 - policy: errors
-                  percent: 50
+                  percent: {{ $.Values.collectors.traceErrorAllocation }}
                 - policy: slow
-                  percent: 25
+                  percent: {{ $.Values.collectors.traceSlowAllocation }}
                 - policy: baseline
-                  percent: 25
+                  percent: {{ $.Values.collectors.traceBaselineAllocation }}
     {{- end }}
     exporters:
     {{- if eq $role "agent" }}
-      otlp/metrics:
+      {{ include "olly.interconnect" $ }}/metrics:
         endpoint: otel-metrics:4317
+        {{- include "olly.arrowExport" $ | nindent 8 }}
         tls: {insecure: true}
-        sending_queue: {queue_size: 1024, num_consumers: 4}
-      otlp/traces:
+        {{- include "olly.interconnectQueue" $ | nindent 8 }}
+      {{ include "olly.interconnect" $ }}/traces:
         endpoint: otel-router:4317
+        {{- include "olly.arrowExport" $ | nindent 8 }}
         tls: {insecure: true}
-        sending_queue: {queue_size: 1024, num_consumers: 4}
+        {{- include "olly.interconnectQueue" $ | nindent 8 }}
     {{- else if eq $role "metrics" }}
       prometheusremotewrite:
         endpoint: http://mimir-gateway/api/v1/push
         headers: {X-Scope-OrgID: platform}
+        target_info: {enabled: false}
         resource_to_telemetry_conversion:
           enabled: false
         remote_write_queue:
-          queue_size: 1024
+          queue_size: {{ $.Values.collectors.queueSize | int }}
           num_consumers: 1
     {{- else if eq $role "router" }}
       loadbalancing:
@@ -103,7 +143,7 @@ data:
         protocol:
           otlp:
             tls: {insecure: true}
-            sending_queue: {queue_size: 1024, num_consumers: 4}
+            {{- include "olly.exportQueue" $ | nindent 12 }}
         resolver:
           static:
             hostnames:
@@ -114,7 +154,7 @@ data:
       otlp/tempo:
         endpoint: tempo-distributor:4317
         tls: {insecure: true}
-        sending_queue: {queue_size: 1024, num_consumers: 4}
+        {{- include "olly.exportQueue" $ | nindent 8 }}
     {{- end }}
     service:
       extensions: [health_check]
@@ -129,14 +169,14 @@ data:
       pipelines:
     {{- if or (eq $role "agent") (eq $role "metrics") }}
         metrics:
-          receivers: [otlp{{ if eq $role "agent" }}, kubeletstats{{ end }}]
-          processors: [memory_limiter, resource, batch]
-          exporters: [{{ if eq $role "agent" }}otlp/metrics{{ else }}prometheusremotewrite{{ end }}]
+          receivers: [{{ $receiver }}{{ if eq $receiver "otelarrow" }}, otlp/http{{ end }}{{ if eq $role "agent" }}, kubeletstats{{ end }}]
+          processors: [memory_limiter, resource, filter/cardinality, {{ if eq $role "metrics" }}transform/identity, {{ end }}batch]
+          exporters: [{{ if eq $role "agent" }}{{ include "olly.interconnect" $ }}/metrics{{ else }}prometheusremotewrite{{ end }}]
     {{- end }}
     {{- if ne $role "metrics" }}
         traces:
-          receivers: [otlp]
+          receivers: [{{ $receiver }}{{ if eq $receiver "otelarrow" }}, otlp/http{{ end }}]
           processors: [memory_limiter, resource, {{ if eq $role "traces" }}tail_sampling, {{ end }}batch]
-          exporters: [{{ if eq $role "agent" }}otlp/traces{{ else if eq $role "router" }}loadbalancing{{ else }}otlp/tempo{{ end }}]
+          exporters: [{{ if eq $role "agent" }}{{ include "olly.interconnect" $ }}/traces{{ else if eq $role "router" }}loadbalancing{{ else }}otlp/tempo{{ end }}]
     {{- end }}
 {{- end }}

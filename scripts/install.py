@@ -13,10 +13,12 @@ try:
     from .platform_config import OPERATORS, load_platform, write_platform
     from .preflight import preflight
     from .regional_values import operator_values, values
+    from .tuning import load_tuning, merge
 except ImportError:
     from platform_config import OPERATORS, load_platform, write_platform
     from preflight import preflight
     from regional_values import operator_values, values
+    from tuning import load_tuning, merge
 
 
 def main():
@@ -31,6 +33,9 @@ def main():
     parser.add_argument("--reuse-operators", nargs="*", choices=OPERATORS, default=[])
     parser.add_argument("--existing-storage-class")
     parser.add_argument(
+        "--tuning", type=pathlib.Path, help="Validated nonsecret pipeline overrides"
+    )
+    parser.add_argument(
         "--check-only",
         action="store_true",
         help="Read cloud/cluster state and render; do not change AWS or Kubernetes",
@@ -38,6 +43,8 @@ def main():
     parser.add_argument("--output-dir", type=pathlib.Path, default=pathlib.Path("build/install"))
     args = parser.parse_args()
     p = load_platform(args.config)
+    if args.tuning:
+        p["tuning"] = merge(p.get("tuning", {}), load_tuning(args.tuning))
     p["operators"].update({name: False for name in args.reuse_operators})
     if args.existing_storage_class:
         p.update(storage_class=args.existing_storage_class, create_storage_class=False)

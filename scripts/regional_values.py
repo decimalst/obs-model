@@ -9,8 +9,10 @@ import yaml
 
 try:
     from .platform_config import OPERATORS, load_platform
+    from .tuning import load_tuning, merge, validate_tuning
 except ImportError:
     from platform_config import OPERATORS, load_platform
+    from tuning import load_tuning, merge, validate_tuning
 
 
 def values(platform, quota_image):
@@ -22,7 +24,7 @@ def values(platform, quota_image):
         for name, az in zip("abc", platform["availability_zones"], strict=True)
     ]
     buckets = platform["buckets"]
-    return {
+    generated = {
         "region": region,
         "clusterName": platform["cluster_name"],
         "storageClass": platform.get("storage_class", "gp3-encrypted"),
@@ -81,6 +83,8 @@ def values(platform, quota_image):
         },
     }
 
+    return merge(generated, validate_tuning(platform.get("tuning", {})))
+
 
 def operator_values(platform):
     return {
@@ -96,9 +100,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--terraform-output", type=pathlib.Path, required=True)
     p.add_argument("--quota-image", required=True)
+    p.add_argument("--tuning", type=pathlib.Path)
     p.add_argument("--output", type=pathlib.Path, required=True)
     args = p.parse_args()
     platform = load_platform(args.terraform_output)
+    if args.tuning:
+        platform["tuning"] = merge(platform.get("tuning", {}), load_tuning(args.tuning))
     result = values(platform, args.quota_image)
     args.output.parent.mkdir(exist_ok=True, parents=True)
     args.output.write_text(yaml.safe_dump(result, sort_keys=False))

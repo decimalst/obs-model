@@ -60,4 +60,6 @@ No scheduled workflow destroys infrastructure. Expired debug grants only stop co
 
 ## Alert rules
 
-`docs/alerts.yaml` contains a Mimir rule group for sustained quota drops, dependency failures, and refused spans. After verifying ingestion, use the authenticated regional Mimir ruler API to upload it to an owned namespace. Configure an Alertmanager receiver separately; this repository does not invent recipients or send notifications. Grafana's multi-replica unified alerting is disabled to avoid duplicate evaluation without additional HA coordination. The included Grafana dashboard shows the same protection metrics.
+Rules in `charts/platform/files/rules/platform.yaml` are mounted into every Mimir ruler and reconciled from Git. Edit these and their `tests/rules/` behavior tests through PRs; the ruler write API is disabled. Configure an Alertmanager receiver separately before relying on paging. Grafana unified alerting remains disabled to avoid duplicate evaluation. See [GitOps](gitops.md) for migration of existing API/S3 rules and dashboard/query ownership.
+
+For PR-based configuration sync and drift repair, see [GitOps](gitops.md). For every component's scaling control and stateful constraints, see [capacity operations](scaling.md). Quota-policy changes intentionally backpressure while old policies drain; do not reset active keys.

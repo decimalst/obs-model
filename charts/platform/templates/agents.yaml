@@ -37,8 +37,7 @@ spec:
             {{- end }}
             seccompProfile: {type: RuntimeDefault}
           resources:
-            requests: {cpu: 100m, memory: 128Mi}
-            limits: {cpu: "1", memory: 512Mi}
+            {{- toYaml $.Values.resources.agents | nindent 12 }}
           env:
             - name: K8S_NODE_NAME
               valueFrom: {fieldRef: {fieldPath: spec.nodeName}}

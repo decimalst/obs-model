@@ -1,0 +1,20 @@
+# Merge into each application's Pod template. SDK/environment integration must
+# be enabled by the application; this fragment does not install an SDK.
+metadata:
+  labels:
+    observability/service: checkout
+spec:
+  containers:
+    - name: application
+      env:
+        - name: POD_UID
+          valueFrom:
+            fieldRef: {fieldPath: metadata.uid}
+        - name: OTEL_SERVICE_NAME
+          value: checkout
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: service.instance.id=$(POD_UID),k8s.pod.uid=$(POD_UID)
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: grpc
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-agent.observability.svc.cluster.local:4317

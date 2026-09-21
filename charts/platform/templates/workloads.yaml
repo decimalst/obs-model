@@ -3,6 +3,8 @@
 {{- $otel := hasPrefix "otel-" $name }}
 {{- $sampler := eq $name "otel-traces" }}
 {{- $writer := eq $name "vector-writer" }}
+{{- $resources := $.Values.resources.gateways }}
+{{- if $sampler }}{{- $resources = $.Values.resources.samplers }}{{- else if $writer }}{{- $resources = $.Values.resources.writers }}{{- else if eq $name "log-quota" }}{{- $resources = $.Values.resources.quota }}{{- end }}
 {{- $bluegreen := and $.Values.rollouts.enabled (not (or $sampler $writer)) }}
 ---
 apiVersion: {{ if $bluegreen }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
@@ -12,7 +14,7 @@ metadata:
   labels:
     {{- include "olly.labels" $ | nindent 4 }}
 spec:
-  replicas: {{ if eq $name "log-quota" }}{{ $.Values.quota.replicas }}{{ else }}{{ $.Values.collectors.replicas }}{{ end }}
+  replicas: {{ if eq $name "log-quota" }}{{ $.Values.quota.replicas }}{{ else if eq $name "vector-writer" }}{{ $.Values.scaling.writerReplicas }}{{ else }}{{ $.Values.collectors.replicas }}{{ end }}
   {{- if $sampler }}
   serviceName: otel-traces-peer
   podManagementPolicy: Parallel
@@ -74,8 +76,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           resources:
-            requests: {cpu: "250m", memory: {{ if $sampler }}"1Gi"{{ else }}"256Mi"{{ end }}}
-            limits: {cpu: "2", memory: {{ if $sampler }}"2Gi"{{ else }}"1Gi"{{ end }}}
+            {{- toYaml $resources | nindent 12 }}
           {{- if eq $name "log-quota" }}
           env:
             - {name: REDIS_ADDR, value: {{ $.Values.quota.redisAddress | quote }}}
@@ -85,7 +86,7 @@ spec:
               valueFrom:
                 secretKeyRef: {name: {{ $.Values.quota.secretName }}, key: password}
             {{- range $key, $value := dict "EVENTS_PER_SECOND" $.Values.quota.eventsPerSecond "EVENT_BURST" $.Values.quota.eventBurst "BYTES_PER_SECOND" $.Values.quota.bytesPerSecond "BYTE_BURST" $.Values.quota.byteBurst "DEBUG_EVENTS_PER_SECOND" $.Values.quota.debugEventsPerSecond "DEBUG_EVENT_BURST" $.Values.quota.debugEventBurst "DEBUG_BYTES_PER_SECOND" $.Values.quota.debugBytesPerSecond "DEBUG_BYTE_BURST" $.Values.quota.debugByteBurst }}
-            - {name: {{ $key }}, value: {{ $value | quote }}}
+            - {name: {{ $key }}, value: {{ $value | int64 | quote }}}
             {{- end }}
           {{- else if $writer }}
           env:

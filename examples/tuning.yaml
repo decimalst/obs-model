@@ -1,0 +1,61 @@
+# Optional overrides; omitted settings retain the safe chart defaults.
+# Applied with scripts/install.py --tuning examples/tuning.yaml (also in --check-only).
+collectors:
+  interconnect: arrow  # otlp is the explicit compatibility fallback
+  traceSamplingPercent: 10  # baseline candidates, before the composite span budget
+  traceSpansPerSecond: 2000 # per fixed sampler; 3 samplers per region
+  traceErrorAllocation: 50
+  traceSlowAllocation: 25
+  traceBaselineAllocation: 25
+  queueSize: 256
+  scrapeInterval: 30s
+  scrapeTimeout: 10s
+  scrapeSampleLimit: 10000
+quota: # Shared regional budget for EACH namespace/service, including errors.
+  eventsPerSecond: 1000
+  eventBurst: 2000
+  bytesPerSecond: 1048576
+  byteBurst: 2097152
+  debugEventsPerSecond: 100
+  debugEventBurst: 200
+  debugBytesPerSecond: 102400
+  debugByteBurst: 204800
+logs:
+  agentEventsPerSecond: 500 # per service per node, before shared admission
+  retentionDays: 7
+mimir:
+  mimir:
+    structuredConfig:
+      limits:
+        ingestion_rate: 50000 # tenant-wide samples/s, NOT per service
+        ingestion_burst_size: 100000
+        max_global_series_per_user: 1000000
+        max_global_series_per_metric: 50000
+        max_label_names_per_series: 40
+        max_label_name_length: 128
+        max_label_value_length: 512
+        compactor_blocks_retention_period: 15d
+        max_query_parallelism: 16
+tempo:
+  overrides:
+    defaults:
+      ingestion:
+        rate_limit_bytes: 5000000 # global tenant-wide bytes/s
+        burst_size_bytes: 10000000
+      global:
+        max_bytes_per_trace: 5000000
+  compactor:
+    config:
+      compaction:
+        block_retention: 72h
+
+scaling:
+  writerReplicas: 3
+  scrapeReplicas: 3
+  extraKafkaBrokers: 0 # Add broker-only capacity, then explicitly rebalance partitions.
+  logPartitions: 12
+  metricsPartitions: 1 # Increase Mimir ingesters and activate partitions FIRST.
+resources: # CPU strings use whole cores or millicores; memory uses Mi/Gi.
+  gateways:
+    requests: {cpu: "250m", memory: 256Mi}
+    limits: {cpu: "2", memory: 1Gi}

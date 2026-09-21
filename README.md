@@ -94,3 +94,11 @@ The collector independently checks both grant timestamps against its clock, reje
 | Retention | Logs 7 d; Kafka 24 h; metrics 15 d; traces 72 h | Regional backend |
 
 Tune these using measured workload size. Error/slow trace preference is bounded, not a promise to preserve every error. Quota drops are intentional, counted loss. Buffer saturation, replay, failover, and upgrade limitations are documented rather than hidden.
+
+## Pipeline hardening and operations through Git
+
+Use `scripts/install.py --tuning examples/tuning.yaml` to override budgets, sampling, queues, cardinality and retention at deploy time. Arrow is enabled on supported collector links; `collectors.interconnect: otlp` is the explicit fallback. The shared Mimir series-drop policy also protects the scrape and OTLP paths without merging distinct counters.
+
+[GitOps setup](docs/gitops.md) exports regional Flux releases so PRs reconcile pipelines, dashboards, saved queries, alert and recording rules. [Scaling operations](docs/scaling.md) covers each stage and [the adversarial review](docs/adversarial-review.md) explains fixes, quota scope and remaining limits. Run `make collector-test rules-test` for live Arrow/routing/cardinality and alert behavior tests, in addition to the existing checks.
+
+Application metrics must identify their writer (`service.instance.id`, `k8s.pod.uid` or `k8s.node.name`) to avoid merging replicas. Use the [SDK identity fragment](examples/sdk-identity.yaml) with your application's SDK; namespaces must opt in with `observability/collect=true`. Anonymous-writer points are dropped by default and filter-drop telemetry makes that visible.

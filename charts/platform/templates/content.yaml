@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: olly-dashboards
+data:
+  {{- range $path, $_ := .Files.Glob "files/dashboards/*.json" }}
+  {{ base $path }}: |
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
+  saved-queries.json: |
+    {{- $panels := list }}
+    {{- range $i, $query := (.Files.Get "files/queries/catalog.yaml" | fromYamlArray) }}
+    {{- $target := mergeOverwrite (dict "refId" "A" "datasource" $query.datasource) $query.model }}
+    {{- $panels = append $panels (dict "id" (add $i 1) "title" $query.title "type" "table" "datasource" $query.datasource "gridPos" (dict "x" 0 "y" (mul $i 8) "w" 24 "h" 8) "targets" (list $target)) }}
+    {{- end }}
+    {{- dict "uid" "saved-queries" "title" "Saved query library" "schemaVersion" 39 "version" 1 "editable" false "time" (dict "from" "now-1h" "to" "now") "panels" $panels | toJson | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: olly-rules
+data:
+  platform.yaml: |
+    {{- .Files.Get "files/rules/platform.yaml" | nindent 4 }}

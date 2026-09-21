@@ -129,7 +129,7 @@ def main():
         capture_output=True,
     )
     (credentials / "token").write_text("runtime-test-fixture")
-    for role in ["agent", "metrics", "router", "traces"]:
+    for role in ["agent", "metrics", "router", "traces", "scrape"]:
         run(
             [
                 "docker",

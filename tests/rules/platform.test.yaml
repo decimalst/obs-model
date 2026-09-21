@@ -1,0 +1,79 @@
+rule_files:
+- /rules/platform.yaml
+evaluation_interval: 1m
+tests:
+- name: sustained overload alerts and recording query
+  interval: 1m
+  input_series:
+  - series: log_quota_accepted_total
+    values: 0+80x20
+  - series: log_quota_dropped_total
+    values: 0+20x20
+  - series: log_quota_unavailable_total
+    values: 0+1x20
+  - series: otelcol_processor_refused_spans
+    values: 0+1x20
+  - series: otelcol_processor_filter_datapoints_filtered
+    values: 0+1x20
+  promql_expr_test:
+  - expr: platform:log_quota_drop_ratio:5m
+    eval_time: 15m
+    exp_samples:
+    - labels: '{__name__="platform:log_quota_drop_ratio:5m"}'
+      value: 0.2
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: LogQuotaDropsSustained
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: More than 10 percent of presented log events are being dropped by
+          quota
+  - eval_time: 15m
+    alertname: LogAdmissionDependencyUnavailable
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: Log admission is failing closed because a dependency is unavailable
+  - eval_time: 15m
+    alertname: OTelRefusedSpans
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: Trace collectors are refusing spans under pressure
+  - eval_time: 15m
+    alertname: OTelMetricPolicyDrops
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+      exp_annotations:
+        summary: Metric points violate cardinality or writer identity policy
+- name: healthy traffic remains quiet
+  interval: 1m
+  input_series:
+  - series: log_quota_accepted_total
+    values: 0+100x20
+  - series: log_quota_dropped_total
+    values: 0+0x20
+  - series: log_quota_unavailable_total
+    values: 0+0x20
+  - series: otelcol_processor_refused_spans
+    values: 0+0x20
+  - series: otelcol_processor_filter_datapoints_filtered
+    values: 0+0x20
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: LogQuotaDropsSustained
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: LogAdmissionDependencyUnavailable
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: OTelRefusedSpans
+    exp_alerts: []
+  - eval_time: 15m
+    alertname: OTelMetricPolicyDrops
+    exp_alerts: []

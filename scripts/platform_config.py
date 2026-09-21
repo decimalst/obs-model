@@ -7,6 +7,11 @@ from pathlib import Path
 
 import yaml
 
+try:
+    from .tuning import validate_tuning
+except ImportError:
+    from tuning import validate_tuning
+
 OPERATORS = (
     "cert-manager",
     "argo-rollouts",
@@ -29,6 +34,7 @@ def load_platform(path):
 def validate_platform(p):
     p = dict(p)
     allowed = {
+        "tuning",
         "region",
         "cluster_name",
         "cluster_arn",
@@ -99,6 +105,8 @@ def validate_platform(p):
         r"[a-z0-9][a-z0-9.-]*", p["storage_class"]
     ):
         raise ValueError("Set a valid storage_class and boolean create_storage_class")
+    if "tuning" in p:
+        p["tuning"] = validate_tuning(p["tuning"])
     return p
 
 

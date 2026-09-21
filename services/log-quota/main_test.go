@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -202,5 +204,61 @@ func TestRedisDebugSubBudgetAndBytes(t *testing.T) {
 	ok, err = a.Allow(context.Background(), []Record{{Event{service + "-bytes", "ERROR"}, []byte("123456")}})
 	if err != nil || ok[0] {
 		t.Fatal("large error log bypassed byte quota")
+	}
+}
+
+func TestRedisPolicyTransitionFailsClosedAndExpires(t *testing.T) {
+	r := redisClient(t)
+	ctx := context.Background()
+	service := fmt.Sprintf("test/policy-%d", time.Now().UnixNano())
+	records := []Record{{Event{service, "ERROR"}, []byte("x")}}
+	a := RedisAdmission{r, Limits{1, 1, 1, 1, 1, 1, 1, 1}}
+	if ok, err := a.Allow(ctx, records); err != nil || !ok[0] {
+		t.Fatalf("initial admission: %v %v", ok, err)
+	}
+	b := RedisAdmission{r, Limits{10, 10, 10, 10, 1, 1, 1, 1}}
+	if _, err := b.Allow(ctx, records); err == nil {
+		t.Fatal("mixed quota policies must fail closed")
+	}
+	// Keep trying the new policy beyond the original 2s TTL. Rejections must
+	// never keep the previous policy alive after its last active writer drains.
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		if ok, err := b.Allow(ctx, records); err == nil && ok[0] {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("new policy never became active after the old bucket expired")
+}
+
+func TestRedisClockRollbackDoesNotMintTokens(t *testing.T) {
+	r := redisClient(t)
+	ctx := context.Background()
+	service := fmt.Sprintf("test/clock-%d", time.Now().UnixNano())
+	hash := sha256.Sum256([]byte(service))
+	key := "olly:quota:v1:" + hex.EncodeToString(hash[:])
+	now, err := r.Time(ctx).Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := float64(now.Unix()) + 30
+	if err := r.HSet(ctx, key, "at", future, "events", 0, "bytes", 0, "debug_events", 0, "debug_bytes", 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { r.Del(ctx, key) })
+	a := RedisAdmission{r, Limits{100, 100, 100, 100, 10, 10, 10, 10}}
+	for i := 0; i < 2; i++ {
+		ok, err := a.Allow(ctx, []Record{{Event{service, "ERROR"}, []byte("x")}})
+		if err != nil || ok[0] {
+			t.Fatalf("rollback minted tokens: %v %v", ok, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if at, err := r.HGet(ctx, key, "at").Float64(); err != nil || at != future {
+		t.Fatalf("bucket clock moved backwards: %v %v", at, err)
+	}
+	if ttl, err := r.TTL(ctx, key).Result(); err != nil || ttl < 29*time.Second {
+		t.Fatalf("rollback shortened safe expiry: %v %v", ttl, err)
 	}
 }

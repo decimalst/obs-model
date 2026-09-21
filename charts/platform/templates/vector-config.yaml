@@ -67,7 +67,7 @@ data:
           timeout_secs: 15
         buffer:
           type: disk
-          max_size: 536870912
+          max_size: {{ .Values.logs.agentBufferBytes | int }}
           when_full: block
         healthcheck:
           enabled: false
@@ -113,7 +113,7 @@ data:
           "enable.idempotence": "true"
         buffer:
           type: memory
-          max_events: 2048
+          max_events: {{ .Values.logs.gatewayBufferEvents | int }}
           when_full: block
       metrics:
         type: prometheus_exporter
@@ -161,7 +161,7 @@ data:
           timeout_secs: 2
         buffer:
           type: memory
-          max_events: 4096
+          max_events: {{ .Values.logs.writerBufferEvents | int }}
           when_full: block
       metrics:
         type: prometheus_exporter

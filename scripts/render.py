@@ -11,7 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BUILD = ROOT / "build"
 
 
-def render():
+def render(platform_values=None):
     BUILD.mkdir(exist_ok=True)
     bootstrap = packaged_crds()
     (BUILD / "bootstrap-crds.yaml").write_text(yaml.safe_dump_all(bootstrap, sort_keys=False))
@@ -31,6 +31,7 @@ def render():
                 "-n",
                 namespace,
                 "--include-crds",
+                *(["-f", str(platform_values)] if chart == "platform" and platform_values else []),
             ],
             check=True,
             capture_output=True,
@@ -49,6 +50,10 @@ def render():
             result.stdout = yaml.safe_dump_all(bootstrap + objects, sort_keys=False)
         (BUILD / f"{chart}.yaml").write_text(result.stdout)
     for doc in yaml.safe_load_all((BUILD / "platform.yaml").read_text()):
+        if doc and doc["kind"] == "OpenTelemetryCollector":
+            directory = BUILD / "configs" / doc["metadata"]["name"]
+            directory.mkdir(exist_ok=True, parents=True)
+            (directory / "collector.yaml").write_text(yaml.safe_dump(doc["spec"]["config"]))
         if not doc or doc["kind"] != "ConfigMap":
             continue
         for filename, value in doc.get("data", {}).items():

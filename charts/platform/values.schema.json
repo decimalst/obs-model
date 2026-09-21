@@ -130,6 +130,18 @@
         },
         "maxDebugHours": {
           "const": 24
+        },
+        "agentBufferBytes": {
+          "type": "integer",
+          "minimum": 268435488
+        },
+        "gatewayBufferEvents": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "writerBufferEvents": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -172,6 +184,108 @@
           "items": {
             "type": "string"
           }
+        },
+        "arrowStreams": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "arrowMemoryMiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "arrowRequestMiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "arrowWaitingMiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "queueSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "queueConsumers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "batchMaxSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "maxReceiveMiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "maxConcurrentStreams": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "traceExpectedPerSecond": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "traceDecisionCache": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "traceSlowMilliseconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "traceErrorAllocation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "traceSlowAllocation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "traceBaselineAllocation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "interconnect": {
+          "enum": [
+            "arrow",
+            "otlp"
+          ]
+        },
+        "requireMetricIdentity": {
+          "type": "boolean"
+        },
+        "batchTimeout": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*s$"
+        },
+        "scrapeTimeout": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*s$"
+        },
+        "arrowQueueItems": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
         }
       }
     },
@@ -211,6 +325,309 @@
     },
     "createStorageClass": {
       "type": "boolean"
+    },
+    "mimir": {
+      "type": "object",
+      "properties": {
+        "mimir": {
+          "type": "object",
+          "properties": {
+            "structuredConfig": {
+              "type": "object",
+              "properties": {
+                "limits": {
+                  "type": "object",
+                  "properties": {
+                    "ingestion_rate": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "ingestion_burst_size": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_global_series_per_user": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "compactor_blocks_retention_period": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*[smhd]$"
+                    },
+                    "max_query_parallelism": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_global_series_per_metric": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_label_names_per_series": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_label_name_length": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_label_value_length": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_fetched_series_per_query": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "max_fetched_chunk_bytes_per_query": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "out_of_order_time_window": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*[smhd]$"
+                    },
+                    "max_query_lookback": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*[smhd]$"
+                    },
+                    "metric_relabel_configs": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "action",
+                          "source_labels",
+                          "separator",
+                          "regex"
+                        ],
+                        "properties": {
+                          "action": {
+                            "const": "drop"
+                          },
+                          "source_labels": {
+                            "type": "array",
+                            "minItems": 1,
+                            "uniqueItems": true,
+                            "items": {
+                              "type": "string",
+                              "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"
+                            }
+                          },
+                          "separator": {
+                            "const": ""
+                          },
+                          "regex": {
+                            "const": ".+"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "ingester": {
+          "type": "object",
+          "properties": {
+            "replicas": {
+              "type": "integer",
+              "minimum": 3,
+              "multipleOf": 3
+            }
+          }
+        }
+      }
+    },
+    "tempo": {
+      "type": "object",
+      "properties": {
+        "overrides": {
+          "type": "object",
+          "properties": {
+            "defaults": {
+              "type": "object",
+              "properties": {
+                "ingestion": {
+                  "type": "object",
+                  "properties": {
+                    "rate_strategy": {
+                      "const": "global"
+                    },
+                    "rate_limit_bytes": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "burst_size_bytes": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                },
+                "global": {
+                  "type": "object",
+                  "properties": {
+                    "max_bytes_per_trace": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "compactor": {
+          "type": "object",
+          "properties": {
+            "config": {
+              "type": "object",
+              "properties": {
+                "compaction": {
+                  "type": "object",
+                  "properties": {
+                    "block_retention": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]*h$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "scaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "writerReplicas": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 120
+        },
+        "scrapeReplicas": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 120
+        },
+        "extraKafkaBrokers": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 120,
+          "multipleOf": 3
+        },
+        "logPartitions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "metricsPartitions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agents",
+        "gateways",
+        "samplers",
+        "writers",
+        "quota",
+        "scrape",
+        "targetAllocator",
+        "kafka",
+        "clickhouse",
+        "keeper"
+      ],
+      "properties": {
+        "agents": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "gateways": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "samplers": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "writers": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "quota": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "scrape": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "targetAllocator": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "kafka": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "clickhouse": {
+          "$ref": "#/definitions/componentResources"
+        },
+        "keeper": {
+          "$ref": "#/definitions/componentResources"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "componentResources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requests",
+        "limits"
+      ],
+      "properties": {
+        "requests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cpu",
+            "memory"
+          ],
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*m?$"
+            },
+            "memory": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cpu",
+            "memory"
+          ],
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*m?$"
+            },
+            "memory": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+            }
+          }
+        }
+      }
     }
   }
 }

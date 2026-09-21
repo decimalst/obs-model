@@ -52,13 +52,14 @@ func (a RedisAdmission) Allow(ctx context.Context, records []Record) ([]bool, er
 	p := a.Client.Pipeline()
 	cmds := make([]*redis.Cmd, len(records))
 	l := a.Limits
+	policy := fmt.Sprintf("%d/%d/%d/%d/%d/%d/%d/%d", l.Events, l.EventBurst, l.Bytes, l.ByteBurst, l.DebugEvents, l.DebugEventBurst, l.DebugBytes, l.DebugByteBurst)
 	for i, r := range records {
 		hash := sha256.Sum256([]byte(r.Service))
 		debug := 0
 		if strings.EqualFold(r.Level, "debug") || strings.EqualFold(r.Level, "trace") {
 			debug = 1
 		}
-		cmds[i] = p.Eval(ctx, quotaScript, []string{"olly:quota:v1:" + hex.EncodeToString(hash[:])}, l.Events, l.EventBurst, l.Bytes, l.ByteBurst, l.DebugEvents, l.DebugEventBurst, l.DebugBytes, l.DebugByteBurst, len(r.Raw), debug)
+		cmds[i] = p.Eval(ctx, quotaScript, []string{"olly:quota:v1:" + hex.EncodeToString(hash[:])}, l.Events, l.EventBurst, l.Bytes, l.ByteBurst, l.DebugEvents, l.DebugEventBurst, l.DebugBytes, l.DebugByteBurst, len(r.Raw), debug, policy)
 	}
 	if _, err := p.Exec(ctx); err != nil {
 		return nil, err

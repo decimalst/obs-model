@@ -28,10 +28,13 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v4.2.3
+      - uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
+        with:
+          version: v1.35.0
       - run: make setup deps
       - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0
       - run: make check GO=go KUBECONFORM=kubeconform
       - run: make terraform-init terraform-test
       - run: make runtime-test GO=go
-      - run: make image integration-test
+      - run: make image integration-test collector-test rules-test
       - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 -shellcheck=

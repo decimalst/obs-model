@@ -1,0 +1,25 @@
+- title: Admitted log throughput
+  datasource:
+    type: prometheus
+    uid: mimir
+  model:
+    expr: sum(rate(log_quota_accepted_total[5m]))
+    range: true
+- title: Recent error logs
+  datasource:
+    type: grafana-clickhouse-datasource
+    uid: clickhouse
+  model:
+    rawSql: SELECT timestamp, service_name, message, trace_id FROM observability.logs
+      WHERE $__timeFilter(timestamp) AND level = 'ERROR' ORDER BY timestamp DESC LIMIT
+      100
+    format: 1
+    queryType: sql
+- title: Error traces
+  datasource:
+    type: tempo
+    uid: tempo
+  model:
+    queryType: traceql
+    query: '{ status = error }'
+    limit: 20
