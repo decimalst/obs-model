@@ -40,6 +40,12 @@ spec:
         tls: false
         networkPolicyPeers:
           - podSelector: {}
+          {{- range .Values.networkPolicy.operatorNamespaces }}
+          - namespaceSelector:
+              matchLabels: {kubernetes.io/metadata.name: {{ . | quote }}}
+            podSelector:
+              matchLabels: {app: keda-operator}
+          {{- end }}
     config:
       default.replication.factor: 3
       min.insync.replicas: 2

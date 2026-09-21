@@ -14,7 +14,7 @@ metadata:
   labels:
     {{- include "olly.labels" $ | nindent 4 }}
 spec:
-  replicas: {{ if eq $name "log-quota" }}{{ $.Values.quota.replicas }}{{ else if eq $name "vector-writer" }}{{ $.Values.scaling.writerReplicas }}{{ else }}{{ $.Values.collectors.replicas }}{{ end }}
+  replicas: {{ if eq $name "log-quota" }}{{ $.Values.quota.replicas }}{{ else if eq $name "vector-writer" }}{{ if $.Values.clickhouse.pauseWrites }}0{{ else }}{{ $.Values.scaling.writerReplicas }}{{ end }}{{ else }}{{ $.Values.collectors.replicas }}{{ end }}
   {{- if $sampler }}
   serviceName: otel-traces-peer
   podManagementPolicy: Parallel

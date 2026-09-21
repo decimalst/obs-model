@@ -17,6 +17,7 @@ except ImportError:
     from regional_values import operator_values, values
 
 CRDS = {
+    "keda": ("scaledobjects.keda.sh", "v1alpha1"),
     "cert-manager": ("certificates.cert-manager.io", "v1"),
     "argo-rollouts": ("rollouts.argoproj.io", "v1alpha1"),
     "strimzi-kafka-operator": ("kafkas.kafka.strimzi.io", "v1"),
@@ -24,6 +25,7 @@ CRDS = {
     "altinity-clickhouse-operator": ("clickhouseinstallations.clickhouse.altinity.com", "v1"),
 }
 LABELS = {
+    "keda": ("app", "keda-operator"),
     "cert-manager": ("app.kubernetes.io/name", "cert-manager"),
     "argo-rollouts": ("app.kubernetes.io/name", "argo-rollouts"),
     "strimzi-kafka-operator": ("strimzi.io/kind", "cluster-operator"),
@@ -191,12 +193,9 @@ def preflight(p, reader=read):
         if owns_operators
         else {}
     )
+    api_services = kube("apiservices")["items"]
     metrics_api = next(
-        (
-            a
-            for a in kube("apiservices")["items"]
-            if a["metadata"]["name"] == "v1beta1.metrics.k8s.io"
-        ),
+        (a for a in api_services if a["metadata"]["name"] == "v1beta1.metrics.k8s.io"),
         None,
     )
     if p.get("operators", {}).get("metrics-server", True) and metrics_api:
@@ -204,6 +203,30 @@ def preflight(p, reader=read):
             owns_operators and owned_components.get("components", {}).get("metrics-server", True),
             "metrics-server already exists. Explicitly reuse it "
             "to avoid APIService ownership conflicts.",
+        )
+    external_api = next(
+        (a for a in api_services if a["metadata"]["name"] == "v1beta1.external.metrics.k8s.io"),
+        None,
+    )
+    if p.get("operators", {}).get("keda", True) and external_api:
+        require(
+            owns_operators and owned_components.get("components", {}).get("keda", False),
+            "An external metrics API already exists. Explicitly reuse compatible KEDA, "
+            "or disable KEDA installation and select writerAutoscaling.mode=cpu. "
+            "Do not replace another metrics adapter implicitly.",
+        )
+    uses_keda = (
+        p.get("tuning", {}).get("autoscaling", {}).get("enabled", True)
+        and p.get("tuning", {}).get("writerAutoscaling", {}).get("mode", "kafka") == "kafka"
+    )
+    if uses_keda and not p.get("operators", {}).get("keda", True):
+        require(
+            external_api
+            and any(
+                c["type"] == "Available" and c["status"] == "True"
+                for c in external_api.get("status", {}).get("conditions", [])
+            ),
+            "Reused KEDA requires an Available external metrics API",
         )
     capacity_controllers = [
         d
@@ -230,6 +253,8 @@ def preflight(p, reader=read):
             f"{name} belongs to the operators release. Reuse cannot transfer ownership "
             "or uninstall it; keep it enabled until an explicit ownership migration.",
         )
+        if name == "keda" and not enabled and not uses_keda:
+            continue
         if name in CRDS:
             crd_name, version = CRDS[name]
             existing = crds.get(crd_name)

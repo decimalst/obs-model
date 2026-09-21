@@ -17,3 +17,7 @@ Build a regional AWS observability platform from the architecture in docs/archit
 - GitOps reconciles regional Helm releases and file-provisioned content. Preserve existing release names/storage namespaces and controller ownership. Scope drift exceptions to controller-owned fields; never ignore entire workload specs.
 - Pipeline changes need representative input/output tests. Run `make collector-test` for Arrow, routing or cardinality changes and `make rules-test` for alert/recording rules. Keep Mimir metric drop policy and edge filters consistent; dropping labels is not aggregation.
 - Never claim replicas add ClickHouse write shards or that broker additions rebalance partitions. Document trace drains, partition activation, rule-source migrations and ClickHouse TTL alterations explicitly.
+
+- ClickHouse sharding changes require `make sharding-test`. Keep shard names append-only, replicas separated by AZ per shard, foreground distributed inserts and quorum acknowledgements. Never silently retain legacy local tables behind distributed table names. Do not remove or reduce a shard without a separate verified data migration.
+
+- Kafka consumer changes require `make consumer-test`. Keep one stable consumer group, acknowledge only after storage completion, cap consumer scaling at partition count, and never run a CPU HPA alongside KEDA for the same target. Pause KEDA with database maintenance. Partition increases are reviewed changes; decreases require a separate data migration.

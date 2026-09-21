@@ -580,6 +580,93 @@
           "$ref": "#/definitions/componentResources"
         }
       }
+    },
+    "clickhouse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shards",
+        "replicas",
+        "insertQuorum",
+        "insertQuorumTimeoutMs",
+        "schemaJob",
+        "pauseWrites"
+      ],
+      "properties": {
+        "shards": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 32
+        },
+        "replicas": {
+          "const": 3
+        },
+        "insertQuorum": {
+          "const": 2
+        },
+        "insertQuorumTimeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 60000
+        },
+        "schemaJob": {
+          "type": "boolean"
+        },
+        "pauseWrites": {
+          "type": "boolean"
+        }
+      }
+    },
+    "writerAutoscaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "maxReplicas",
+        "lagThreshold",
+        "pollingInterval",
+        "scaleDownStabilizationSeconds",
+        "scaleUpPodsPerMinute",
+        "scaleDownPodsPerMinute"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "kafka",
+            "cpu"
+          ]
+        },
+        "maxReplicas": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 256
+        },
+        "lagThreshold": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "pollingInterval": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 120
+        },
+        "scaleDownStabilizationSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 3600
+        },
+        "scaleUpPodsPerMinute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "scaleDownPodsPerMinute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
     }
   },
   "definitions": {

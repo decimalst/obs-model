@@ -68,6 +68,14 @@ autoscaling:
   enabled: true
   maxReplicas: 12
   targetCPU: 70
+writerAutoscaling:
+  mode: kafka
+  maxReplicas: 12
+  lagThreshold: 5000
+  pollingInterval: 15
+  scaleDownStabilizationSeconds: 300
+  scaleUpPodsPerMinute: 3
+  scaleDownPodsPerMinute: 1
 rollouts:
   enabled: true
   autoPromotionEnabled: false
@@ -377,7 +385,7 @@ scaling:
   writerReplicas: 3
   scrapeReplicas: 3
   extraKafkaBrokers: 0
-  logPartitions: 12
+  logPartitions: 36
   metricsPartitions: 1
 resources:
   agents:
@@ -450,3 +458,10 @@ resources:
     limits:
       cpu: '1'
       memory: 1Gi
+clickhouse:
+  shards: 2
+  replicas: 3
+  insertQuorum: 2
+  insertQuorumTimeoutMs: 10000
+  schemaJob: true
+  pauseWrites: false

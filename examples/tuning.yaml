@@ -53,9 +53,22 @@ scaling:
   writerReplicas: 3
   scrapeReplicas: 3
   extraKafkaBrokers: 0 # Add broker-only capacity, then explicitly rebalance partitions.
-  logPartitions: 12
+  logPartitions: 36 # Headroom for raising the writer ceiling without repartitioning.
   metricsPartitions: 1 # Increase Mimir ingesters and activate partitions FIRST.
 resources: # CPU strings use whole cores or millicores; memory uses Mi/Gi.
   gateways:
     requests: {cpu: "250m", memory: 256Mi}
     limits: {cpu: "2", memory: 1Gi}
+
+clickhouse:
+  shards: 2 # 3 replicas per shard, each in a different AZ. Append shards; never shrink in place.
+  insertQuorumTimeoutMs: 10000
+
+writerAutoscaling:
+  mode: kafka # cpu is the explicit fallback when KEDA cannot be installed/reused.
+  maxReplicas: 12 # Raise to 24 or 36 after checking ClickHouse and node capacity.
+  lagThreshold: 5000 # Target uncommitted records per consumer; tune from measured drain rate.
+  pollingInterval: 15
+  scaleDownStabilizationSeconds: 300
+  scaleUpPodsPerMinute: 3
+  scaleDownPodsPerMinute: 1

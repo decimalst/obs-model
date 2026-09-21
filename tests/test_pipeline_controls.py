@@ -201,8 +201,8 @@ class PipelineControls(unittest.TestCase):
 
         version = next(v for v in schema["spec"]["versions"] if v["name"] == "v1")
         jsonschema.validate(brokers, strict(version["schema"]["openAPIV3Schema"]))
-        hpa = d["HorizontalPodAutoscaler", "vector-writer"]["spec"]
-        self.assertEqual(hpa["maxReplicas"], 6)
+        hpa = d["ScaledObject", "vector-writer"]["spec"]
+        self.assertEqual(hpa["maxReplicaCount"], 6)
         self.assertEqual(hpa["scaleTargetRef"]["kind"], "Deployment")
         self.assertEqual(d["KafkaTopic", "mimir-ingest"]["spec"]["partitions"], 2)
 

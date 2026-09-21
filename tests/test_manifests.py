@@ -50,6 +50,7 @@ class Manifests(unittest.TestCase):
                     jsonschema.Draft7Validator(schemas[key]).validate(d)
                     checked.append(d["kind"])
         for required in [
+            "ScaledObject",
             "Kafka",
             "KafkaNodePool",
             "KafkaTopic",

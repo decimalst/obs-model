@@ -25,3 +25,4 @@ operators:
   altinity-clickhouse-operator: true
   cluster-autoscaler: false
   metrics-server: false
+  keda: true

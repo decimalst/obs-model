@@ -8,6 +8,7 @@ JSON/YAML. Conflicting schema keys always fail; all other packages are strict.
 
 import argparse
 import pathlib
+import subprocess
 import tarfile
 
 import yaml
@@ -59,6 +60,26 @@ def packaged_crds(enabled=None):
             chart_name = yaml.safe_load(chart.extractfile(metadata).read())["name"]
             if enabled is not None and not enabled.get(chart_name, True):
                 continue
+            if chart_name == "keda":
+                # KEDA packages templated CRDs under templates/crds, not crds/.
+                rendered = subprocess.run(
+                    [
+                        "helm",
+                        "template",
+                        "crd-bootstrap",
+                        str(archive),
+                        "--set",
+                        "crds.install=true",
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                result.extend(
+                    d
+                    for d in yaml.load_all(rendered.stdout, Loader=UniqueLoader)
+                    if d and d["kind"] == "CustomResourceDefinition"
+                )
             for item in chart.getmembers():
                 parts = pathlib.PurePosixPath(item.name).parts
                 if len(parts) >= 3 and parts[1] == "crds" and item.name.endswith((".yaml", ".yml")):

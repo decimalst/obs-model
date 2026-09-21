@@ -11,8 +11,8 @@ flowchart LR
   Q <--> R[(Regional Multi-AZ Valkey)]
   Q --> VG[HA Vector gateways]
   VG --> K[(Kafka RF=3 / min ISR=2)]
-  K --> VW[Vector consumer group]
-  VW --> CH[(Replicated ClickHouse + Keeper)]
+  K --> VW[Vector consumer group<br/>KEDA lag scaling]
+  VW --> CH[(Sharded + replicated ClickHouse + Keeper)]
   CH --> EV[Derived event aggregates]
   Apps --> OA[OTel node agents]
   TA[Target Allocator] --> SP[Sharded scrape pool]
@@ -47,6 +47,7 @@ make check
 make terraform-init terraform-test
 make runtime-test
 make image integration-test
+make collector-test rules-test sharding-test consumer-test
 ```
 
 Checks do not apply Terraform or create AWS resources. The integration test creates and removes only containers and a network bearing its unique test identifier. Its one-broker/one-database topology verifies the data path, not three-AZ failover.
@@ -102,3 +103,7 @@ Use `scripts/install.py --tuning examples/tuning.yaml` to override budgets, samp
 [GitOps setup](docs/gitops.md) exports regional Flux releases so PRs reconcile pipelines, dashboards, saved queries, alert and recording rules. [Scaling operations](docs/scaling.md) covers each stage and [the adversarial review](docs/adversarial-review.md) explains fixes, quota scope and remaining limits. Run `make collector-test rules-test` for live Arrow/routing/cardinality and alert behavior tests, in addition to the existing checks.
 
 Application metrics must identify their writer (`service.instance.id`, `k8s.pod.uid` or `k8s.node.name`) to avoid merging replicas. Use the [SDK identity fragment](examples/sdk-identity.yaml) with your application's SDK; namespaces must opt in with `observability/collect=true`. Anonymous-writer points are dropped by default and filter-drop telemetry makes that visible.
+
+ClickHouse defaults to **two shards × three AZ-separated replicas**. It distributes a busy source cluster across shards and queries them through one table. Increase `clickhouse.shards` using the [pause/expand/resume runbook](docs/clickhouse-sharding.md); historical data stays in place and remains queryable. Run `make sharding-test` for replicated storage, failure and expansion tests.
+
+Kafka logs start with **36 partitions and 3–12 consumers**, scaled by queue lag through KEDA. Raise `writerAutoscaling.maxReplicas` through a PR to use the partition headroom; tune the lag target independently. Writers share one consumer group, drain gradually during scale-down, and commit offsets after ClickHouse acknowledgement. See [Kafka consumer operations](docs/kafka-consumers.md) and run `make consumer-test`.

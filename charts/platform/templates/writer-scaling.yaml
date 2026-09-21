@@ -1,0 +1,49 @@
+{{- if and .Values.autoscaling.enabled (eq .Values.writerAutoscaling.mode "kafka") }}
+# Only KEDA owns this consumer group's HPA. Pause the scaler with the writers.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vector-writer
+  {{- if .Values.clickhouse.pauseWrites }}
+  annotations:
+    autoscaling.keda.sh/paused-replicas: "0"
+  {{- end }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vector-writer
+  pollingInterval: {{ .Values.writerAutoscaling.pollingInterval }}
+  minReplicaCount: {{ .Values.scaling.writerReplicas }}
+  maxReplicaCount: {{ min .Values.writerAutoscaling.maxReplicas .Values.scaling.logPartitions }}
+  fallback:
+    failureThreshold: 3
+    replicas: {{ .Values.scaling.writerReplicas }}
+    behavior: currentReplicasIfHigher
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      name: vector-writer-lag
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - {type: Pods, value: {{ .Values.writerAutoscaling.scaleUpPodsPerMinute }}, periodSeconds: 60}
+        scaleDown:
+          stabilizationWindowSeconds: {{ .Values.writerAutoscaling.scaleDownStabilizationSeconds }}
+          policies:
+            - {type: Pods, value: {{ .Values.writerAutoscaling.scaleDownPodsPerMinute }}, periodSeconds: 60}
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: telemetry-kafka-bootstrap.{{ .Release.Namespace }}.svc:9092
+        consumerGroup: clickhouse-writer-v1
+        topic: logs
+        lagThreshold: {{ .Values.writerAutoscaling.lagThreshold | quote }}
+        offsetResetPolicy: earliest
+        allowIdleConsumers: "false"
+        excludePersistentLag: "false"
+        scaleToZeroOnInvalidOffset: "false"
+        # Sarama protocol level, compatible with the pinned 4.2.1 brokers.
+        version: "4.0.0"
+{{- end }}

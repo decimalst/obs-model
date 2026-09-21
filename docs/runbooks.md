@@ -63,3 +63,5 @@ No scheduled workflow destroys infrastructure. Expired debug grants only stop co
 Rules in `charts/platform/files/rules/platform.yaml` are mounted into every Mimir ruler and reconciled from Git. Edit these and their `tests/rules/` behavior tests through PRs; the ruler write API is disabled. Configure an Alertmanager receiver separately before relying on paging. Grafana unified alerting remains disabled to avoid duplicate evaluation. See [GitOps](gitops.md) for migration of existing API/S3 rules and dashboard/query ownership.
 
 For PR-based configuration sync and drift repair, see [GitOps](gitops.md). For every component's scaling control and stateful constraints, see [capacity operations](scaling.md). Quota-policy changes intentionally backpressure while old policies drain; do not reset active keys.
+
+ClickHouse now defaults to two shards × three replicas. Use the [sharding runbook](clickhouse-sharding.md) for the write-pause expansion procedure and the mandatory pre-0.3 schema migration. A post-install/upgrade Helm hook establishes the schema during GitOps reconciliation.

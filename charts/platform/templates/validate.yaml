@@ -24,7 +24,7 @@
 {{- fail "Mimir needs at least 3 ingester replicas per metrics partition (one per AZ)" -}}
 {{- end -}}
 
-{{- if and .Values.autoscaling.enabled (gt (int .Values.scaling.writerReplicas) (int .Values.autoscaling.maxReplicas)) -}}
+{{- if and .Values.autoscaling.enabled (gt (int .Values.scaling.writerReplicas) (int .Values.writerAutoscaling.maxReplicas)) -}}
 {{- fail "writerReplicas cannot exceed the HPA maximum" -}}
 {{- end -}}
 

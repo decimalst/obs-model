@@ -2,21 +2,21 @@
 
 Use `resources.agents`, `gateways`, `samplers`, `writers`, `quota`, `scrape`, `targetAllocator`, `kafka`, `clickhouse` and `keeper` to size custom components without editing templates. Requests cannot exceed limits. Native Mimir/Tempo/Grafana chart values retain their resource controls.
 
-Scaling is explicit at each bottleneck. Stateless tiers are elastic; persistent placement and trace state need controlled changes. Tune with measured queue occupancy, consumer lag, drop/refusal counts, memory and storage headroom, not CPU alone. HPA requires the preflight-verified metrics API and node capacity. CPU-only scaling is a baseline, not an overload guarantee.
+Scaling is explicit at each bottleneck. Stateless tiers are elastic; persistent placement and trace state need controlled changes. Tune with measured queue occupancy, consumer lag, drop/refusal counts, memory and storage headroom, not CPU alone. CPU HPA requires the preflight-verified metrics API and node capacity. Kafka writers use KEDA consumer lag by default; CPU scaling remains an explicit compatibility fallback. Neither can fix an overloaded downstream store by itself.
 
 | Component | Scaling control | Operational procedure |
 |---|---|---|
 | Vector/OTel node agents | DaemonSets follow nodes; log service/node throttle | Scale EKS groups; remember the independent shared service quota still applies |
 | Shared log admission, Vector gateways, OTel routers/metrics | HPA 3–12, `autoscaling.maxReplicas`/`targetCPU` | Preview then promote; monitor refused data, buffer occupancy and dependency latency |
-| Vector Kafka writers | HPA 3–min(maxReplicas, logPartitions), `scaling.writerReplicas` | Watch consumer lag; more consumers than partitions provide no extra throughput |
+| Vector Kafka writers | KEDA lag scaling 3–12; `scaling.writerReplicas`, `writerAutoscaling.maxReplicas`/`lagThreshold` | Ceiling is capped at the partition count; see [consumer operations](kafka-consumers.md). Maintains one consumer group and committed offsets |
 | Scrape pool | `scaling.scrapeReplicas`; two target allocators | Target allocation redistributes ownership; allow at least one scrape interval and inspect target duplication/gaps |
 | Tail samplers | Fixed three, `maxTraces`, decision window and span budgets | Drain or provision another isolated regional cell. Do not change the consistent-hash membership under active traces |
 | Kafka | Fixed 3 combined quorum members; `scaling.extraKafkaBrokers` in multiples of 3 | Add broker-only capacity, rebalance partitions with a reviewed reassignment, verify rack placement/ISR, then remove old capacity if needed |
-| Kafka log topic | `scaling.logPartitions` (12) | Increasing partitions can change keyed ordering; review consumers and lag. Never decrease partitions in place |
+| Kafka log topic | `scaling.logPartitions` (36) | Increasing partitions can change keyed ordering; review consumers and lag. Never decrease partitions in place |
 | Mimir ingest storage | `scaling.metricsPartitions` and `mimir.ingester.replicas` | At least three ingester replicas per partition (one per AZ). Add ingesters and activate partition ownership before increasing topic partitions; use staged PRs and Mimir's partition-ring procedure |
 | Mimir distributors/queriers/frontends/rulers/store gateways | Native pinned dependency values | Increase stateless replica/resources independently; for ingesters/stores preserve AZ replication and PVC ownership |
 | Tempo | Native distributor/querier/frontend resources/replicas; ingester ring/PVCs | Stateless expansion is routine. Ingester expansion/removal needs the Tempo ring and graceful shutdown procedure |
-| ClickHouse | Native pod resources/storage; fixed 1 shard × 3 replicas | Scale resources/disks vertically first. For horizontal writes, add a separately routed cell or implement a reviewed Distributed-table/shard migration; replicas alone cannot solve this bottleneck |
+| ClickHouse | `clickhouse.shards` (2 by default), 3 replicas/shard, `resources.clickhouse`, storage | Pause Kafka writers, append shards through a reviewed PR, verify topology/schema, then resume. Distributed tables route writes and query all shards; see [sharding](clickhouse-sharding.md) |
 | Keeper / Valkey / Grafana PostgreSQL | Quorums/managed AWS services; Terraform node/storage sizing | Retain quorum/AZ guarantees; use AWS/operator procedures and test failover/backups |
 | Grafana | Two replicas on regional PostgreSQL; native resources | File provisioning keeps content identical; use a regional ingress and separate database capacity sizing |
 

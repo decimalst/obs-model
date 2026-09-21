@@ -171,6 +171,10 @@ class Inventory:
                 return {
                     "items": [
                         {
+                            "metadata": {"name": "v1beta1.external.metrics.k8s.io"},
+                            "status": {"conditions": [{"type": "Available", "status": "True"}]},
+                        },
+                        {
                             "metadata": {"name": "v1beta1.metrics.k8s.io"},
                             "status": {
                                 "conditions": [
@@ -180,7 +184,7 @@ class Inventory:
                                     }
                                 ]
                             },
-                        }
+                        },
                     ]
                 }
             if resource == "secret":

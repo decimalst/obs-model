@@ -1,0 +1,52 @@
+{{- if .Values.clickhouse.schemaJob }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-schema
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 900
+  backoffLimit: 6
+  template:
+    metadata:
+      labels: {app: clickhouse-schema}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "olly.security" . | nindent 8 }}
+      containers:
+        - name: schema
+          image: {{ .Values.images.clickhouse }}
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              # Helm waits for this hook, including when ordinary readiness waiting is disabled.
+              for attempt in {1..120}; do
+                if clickhouse-client --host clickhouse-observability --user writer --password "$CLICKHOUSE_PASSWORD" \
+                  --query "SELECT throwIf(count() != {{ mul .Values.clickhouse.shards .Values.clickhouse.replicas }}, 'ClickHouse topology is still reconciling') FROM system.clusters WHERE cluster = 'logs'"; then
+                  exec clickhouse-client --host clickhouse-observability --user writer --password "$CLICKHOUSE_PASSWORD" --multiquery < /schema/schema.sql
+                fi
+                sleep 5
+              done
+              exit 1
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.logs.secretName }}, key: password}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: schema, mountPath: /schema, readOnly: true}
+      volumes:
+        - name: schema
+          configMap: {name: clickhouse-schema}
+{{- end }}

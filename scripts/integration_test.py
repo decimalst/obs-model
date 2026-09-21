@@ -115,7 +115,11 @@ def main():
         )
         containers.append(keeper)
         (directory / "cluster.xml").write_text(
-            """<clickhouse><remote_servers><logs><shard><replica><host>127.0.0.1</host><port>9000</port><user>writer</user><password>validation</password></replica></shard></logs></remote_servers><zookeeper><node><host>keeper</host><port>9181</port></node></zookeeper><macros><shard>01</shard><replica>one</replica></macros></clickhouse>"""
+            """<clickhouse><remote_servers><logs><secret>validation-cluster</secret><shard><internal_replication>true</internal_replication><replica><host>127.0.0.1</host><port>9000</port><user>writer</user><password>validation</password></replica></shard></logs></remote_servers><zookeeper><node><host>keeper</host><port>9181</port></node></zookeeper><macros><shard>01</shard><replica>one</replica></macros></clickhouse>"""
+        )
+        (directory / "profiles.xml").write_text(
+            "<clickhouse><profiles><default><distributed_foreground_insert>1</distributed_foreground_insert>"
+            "<insert_quorum>1</insert_quorum></default></profiles></clickhouse>"
         )
         ch = start(
             "clickhouse-observability",
@@ -128,6 +132,8 @@ def main():
             "CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1",
             "-v",
             f"{directory}/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro",
+            "-v",
+            f"{directory}/profiles.xml:/etc/clickhouse-server/users.d/profiles.xml:ro",
         )
 
         def sql(query):
@@ -301,6 +307,9 @@ def main():
         )
         assert counts == {"debug": "1", "flood": "5", "quiet": "1"}, counts
         assert int(sql("SELECT sum(count) FROM observability.log_events")) == 7
+        assert sql("SELECT uniqExact(cluster_name) FROM observability.logs") == "1"
+        assert sql("SELECT any(cluster_name) FROM observability.logs") == values["clusterName"]
+        assert sql("SELECT uniqExact(event_id) FROM observability.logs") == "7"
         # Source offsets must advance after ClickHouse acknowledges the batch.
         wait(
             lambda: (

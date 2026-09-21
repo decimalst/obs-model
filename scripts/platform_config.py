@@ -20,6 +20,7 @@ OPERATORS = (
     "altinity-clickhouse-operator",
     "cluster-autoscaler",
     "metrics-server",
+    "keda",
 )
 BUCKETS = ("mimir-blocks", "mimir-ruler", "mimir-alertmanager", "tempo")
 

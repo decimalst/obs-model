@@ -1,4 +1,5 @@
 # Capture only Kubernetes metadata as the service identity; never trust JSON payload fields.
+cluster_name = string!(.cluster_name)
 namespace = string(.kubernetes.pod_namespace) ?? "unknown"
 service = string(.kubernetes.pod_labels."observability/service") ?? "unclassified"
 annotations = .kubernetes.pod_annotations
@@ -13,6 +14,8 @@ message = string(payload.message) ?? string(.message) ?? ""
 trace_id = string(payload.trace_id) ?? ""
 # Explicit allow-list keeps arbitrary payload keys and grant timestamps out of indexing.
 . = {
+  "cluster_name": cluster_name,
+  "event_id": uuid_v4(),
   "timestamp": format_timestamp!(clock, format: "%Y-%m-%d %H:%M:%S%.3f"),
   "service_key": namespace + "/" + service,
   "service_name": service,

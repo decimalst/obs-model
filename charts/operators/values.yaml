@@ -6,6 +6,7 @@ components:
   altinity-clickhouse-operator: true
   cluster-autoscaler: true
   metrics-server: true
+  keda: true
 cert-manager:
   crds:
     enabled: true
@@ -117,3 +118,35 @@ metrics-server:
           matchLabels:
             app.kubernetes.io/name: metrics-server
         topologyKey: topology.kubernetes.io/zone
+keda:
+  crds:
+    install: false # Packaged CRDs are applied explicitly before the release.
+  watchNamespace: observability
+  podDisruptionBudget:
+    operator: {minAvailable: 1}
+    metricServer: {minAvailable: 1}
+    webhooks: {minAvailable: 1}
+  operator:
+    replicaCount: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels: {app: keda-operator}
+            topologyKey: topology.kubernetes.io/zone
+  metricsServer:
+    replicaCount: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels: {app: keda-operator-metrics-apiserver}
+            topologyKey: topology.kubernetes.io/zone
+  webhooks:
+    replicaCount: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels: {app: keda-admission-webhooks}
+            topologyKey: topology.kubernetes.io/zone

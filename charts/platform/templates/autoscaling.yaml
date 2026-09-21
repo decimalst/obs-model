@@ -1,5 +1,6 @@
 {{- if .Values.autoscaling.enabled }}
 {{- range $name := list "log-quota" "vector-gateway" "otel-router" "otel-metrics" "vector-writer" }}
+{{- if or (ne $name "vector-writer") (and (not $.Values.clickhouse.pauseWrites) (eq $.Values.writerAutoscaling.mode "cpu")) }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -11,7 +12,7 @@ spec:
     kind: {{ if and $.Values.rollouts.enabled (ne $name "vector-writer") }}Rollout{{ else }}Deployment{{ end }}
     name: {{ $name }}
   minReplicas: {{ if eq $name "vector-writer" }}{{ $.Values.scaling.writerReplicas }}{{ else }}3{{ end }}
-  maxReplicas: {{ if eq $name "vector-writer" }}{{ min $.Values.autoscaling.maxReplicas $.Values.scaling.logPartitions }}{{ else }}{{ $.Values.autoscaling.maxReplicas }}{{ end }}
+  maxReplicas: {{ if eq $name "vector-writer" }}{{ min $.Values.writerAutoscaling.maxReplicas $.Values.scaling.logPartitions }}{{ else }}{{ $.Values.autoscaling.maxReplicas }}{{ end }}
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -24,5 +25,6 @@ spec:
         target:
           type: Utilization
           averageUtilization: {{ $.Values.autoscaling.targetCPU }}
+{{- end }}
 {{- end }}
 {{- end }}

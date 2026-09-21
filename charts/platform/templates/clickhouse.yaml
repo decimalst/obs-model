@@ -111,15 +111,34 @@ spec:
         {{- end }}
     clusters:
       - name: logs
+        secret:
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.logs.secretName }}
+              key: password
+        schemaPolicy:
+          replica: All
+          shard: All
         layout:
-          shardsCount: 1
-          replicasCount: 3
+          replicasCount: {{ .Values.clickhouse.replicas }}
+          shards:
+            {{- range $i := until (int .Values.clickhouse.shards) }}
+            - name: {{ $i | quote }}
+              internalReplication: Enabled
+              replicasCount: {{ $.Values.clickhouse.replicas }}
+            {{- end }}
     profiles:
       default/log_queries: 1
       default/max_memory_usage: 2000000000
-      default/insert_quorum: 2
+      default/distributed_foreground_insert: 1
+      default/async_insert: 0
+      default/skip_unavailable_shards: 0
+      default/insert_quorum: {{ .Values.clickhouse.insertQuorum }}
+      default/insert_quorum_timeout: {{ .Values.clickhouse.insertQuorumTimeoutMs }}
       default/insert_quorum_parallel: 1
       readonly/readonly: 1
+      readonly/skip_unavailable_shards: 0
+      readonly/max_memory_usage: 2000000000
     users:
       default/networks/ip: "127.0.0.1"
       writer/password:
@@ -139,15 +158,13 @@ spec:
   templates:
     podTemplates:
       - name: data
+        # Spread copies of EACH shard across AZs; global anti-affinity would
+        # make the fourth pod unschedulable in a three-AZ region.
+        podDistribution:
+          - type: ShardAntiAffinity
+            topologyKey: topology.kubernetes.io/zone
         spec:
           automountServiceAccountToken: false
-          affinity:
-            podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution:
-                - labelSelector:
-                    matchLabels:
-                      clickhouse.altinity.com/chi: observability
-                  topologyKey: topology.kubernetes.io/zone
           containers:
             - name: clickhouse
               image: {{ .Values.images.clickhouse }}
@@ -179,9 +196,17 @@ metadata:
   name: clickhouse-schema
 data:
   schema.sql: |
+    -- Fail closed instead of silently keeping the pre-0.3 single-shard schema.
+    SELECT throwIf(count() > 0, 'Legacy log schema: follow docs/clickhouse-sharding.md before upgrading')
+    FROM clusterAllReplicas('logs', system.tables)
+    WHERE database = 'observability'
+      AND ((name = 'logs' AND engine != 'Distributed')
+        OR (name = 'log_events' AND engine != 'View'));
     CREATE DATABASE IF NOT EXISTS observability ON CLUSTER logs;
-    CREATE TABLE IF NOT EXISTS observability.logs ON CLUSTER logs
+    CREATE TABLE IF NOT EXISTS observability.logs_local ON CLUSTER logs
     (
+      cluster_name LowCardinality(String),
+      event_id UUID,
       timestamp DateTime64(3, 'UTC'),
       service_key LowCardinality(String),
       service_name LowCardinality(String),
@@ -190,22 +215,32 @@ data:
       message String CODEC(ZSTD(3)),
       trace_id String
     )
-    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/logs', '{replica}')
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{{ .Release.Namespace }}/observability/{shard}/logs_local', '{replica}')
     PARTITION BY toDate(timestamp)
-    ORDER BY (namespace, service_name, timestamp)
+    ORDER BY (cluster_name, namespace, service_name, timestamp, event_id)
     TTL timestamp + INTERVAL {{ .Values.logs.retentionDays }} DAY DELETE;
-    CREATE TABLE IF NOT EXISTS observability.log_events ON CLUSTER logs
+    CREATE TABLE IF NOT EXISTS observability.log_events_local ON CLUSTER logs
     (
+      cluster_name LowCardinality(String),
       minute DateTime('UTC'),
       service_key LowCardinality(String),
       level LowCardinality(String),
       count UInt64
     )
-    ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/{shard}/log_events', '{replica}')
+    ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/{{ .Release.Namespace }}/observability/{shard}/log_events_local', '{replica}')
     PARTITION BY toDate(minute)
-    ORDER BY (service_key, level, minute)
+    ORDER BY (cluster_name, service_key, level, minute)
     TTL minute + INTERVAL {{ .Values.logs.retentionDays }} DAY DELETE;
     CREATE MATERIALIZED VIEW IF NOT EXISTS observability.log_events_mv ON CLUSTER logs
-    TO observability.log_events AS
-    SELECT toStartOfMinute(timestamp) AS minute, service_key, level, count() AS count
-    FROM observability.logs GROUP BY minute, service_key, level;
+    TO observability.log_events_local AS
+    SELECT cluster_name, toStartOfMinute(timestamp) AS minute, service_key, level, count() AS count
+    FROM observability.logs_local GROUP BY cluster_name, minute, service_key, level;
+    CREATE TABLE IF NOT EXISTS observability.logs ON CLUSTER logs
+    AS observability.logs_local
+    ENGINE = Distributed('logs', 'observability', 'logs_local', cityHash64(cluster_name, service_key, event_id));
+    CREATE TABLE IF NOT EXISTS observability.log_events_shards ON CLUSTER logs
+    AS observability.log_events_local
+    ENGINE = Distributed('logs', 'observability', 'log_events_local');
+    CREATE VIEW IF NOT EXISTS observability.log_events ON CLUSTER logs AS
+    SELECT cluster_name, minute, service_key, level, sum(count) AS count
+    FROM observability.log_events_shards GROUP BY cluster_name, minute, service_key, level;

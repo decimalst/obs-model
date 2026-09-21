@@ -27,6 +27,7 @@ data:
         type: remap
         inputs: [kubernetes]
         source: |
+          .cluster_name = {{ .Values.clusterName | toJson }}
           .service_key = (string(.kubernetes.pod_namespace) ?? "unknown") + "/" + (string(.kubernetes.pod_labels."observability/service") ?? "unclassified")
       normalize:
         type: remap
@@ -104,7 +105,8 @@ data:
         topic: logs
         acknowledgements:
           enabled: true
-        key_field: service_key
+        # Event-level partitioning lets one busy service use multiple consumers.
+        key_field: event_id
         compression: zstd
         encoding:
           codec: json
@@ -137,14 +139,26 @@ data:
         group_id: clickhouse-writer-v1
         topics: [logs]
         auto_offset_reset: earliest
+        acknowledgements:
+          enabled: true
+        librdkafka_options:
+          partition.assignment.strategy: cooperative-sticky
         decoding:
           codec: json
       internal:
         type: internal_metrics
+    transforms:
+      storage_identity:
+        type: remap
+        inputs: [kafka]
+        source: |
+          # Backfill buffered pre-0.3 records during the controlled schema migration.
+          .cluster_name = string(.cluster_name) ?? {{ .Values.clusterName | toJson }}
+          .event_id = string(.event_id) ?? uuid_v4()
     sinks:
       clickhouse:
         type: clickhouse
-        inputs: [kafka]
+        inputs: [storage_identity]
         endpoint: http://clickhouse-observability:8123
         database: observability
         table: logs

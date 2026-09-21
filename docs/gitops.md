@@ -44,7 +44,7 @@ Chart reconciliation tracks **Git revisions**, so chart version bumps are not re
 
 GitOps exports default to automatic promotion after the existing three preview-readiness checks; CI and PR review are prerequisites. `--manual-promotion` preserves the initial installer's manual promotion policy. Readiness is not a live delivery test. For changes requiring workload-specific acceptance, choose manual promotion and follow the smoke-test runbook. Quota changes can backpressure briefly while the previous policy expires; provision enough agent disk buffer.
 
-Flux corrects drift except replica counts on the named HPA-managed workloads and Argo's generated Service selector hash. This prevents reconciliation from fighting those controllers. UI dashboard edits are disabled, dashboard removals follow Git, and the Mimir ruler write API is disabled in favor of Git-mounted rules. This baseline provides OSS query panels, not Grafana Enterprise saved-query APIs.
+Flux corrects drift except replica counts on the named HPA/KEDA-managed workloads and Argo's generated Service selector hash. This prevents reconciliation from fighting those controllers. UI dashboard edits are disabled, dashboard removals follow Git, and the Mimir ruler write API is disabled in favor of Git-mounted rules. This baseline provides OSS query panels, not Grafana Enterprise saved-query APIs.
 
 ## Alert delivery and migrations
 
@@ -52,7 +52,11 @@ Rules now evaluate automatically in Mimir. Configure a regional Alertmanager rec
 
 **Existing Mimir installations:** export API/S3-managed rules into the Git files before adopting this version. Switching to local rule storage stops evaluating rules left only in the old bucket. The bucket is retained for migration/rollback; this change does not delete it. All current ruler replicas use the same projected ConfigMap; the existing sharding ring distributes evaluation.
 
-**Existing ClickHouse retention:** `CREATE TABLE IF NOT EXISTS` does not modify an existing table's TTL. A retention change requires reviewed `ALTER TABLE ... ON CLUSTER ... MODIFY TTL ...` for both tables. Keep schema migrations explicit and forward-compatible; Git reverting a chart cannot reverse stored data or storage formats.
+**ClickHouse sharding:** fresh installs use two shards × three replicas. The post-upgrade schema Job provisions the distributed/local tables. Pre-0.3 installs must follow the [legacy migration](clickhouse-sharding.md) first. Shard expansion uses three PRs (pause, expand, resume); CI blocks reductions and unsafe expansion sequences.
+
+**Kafka consumers:** a regional PR can raise `writerAutoscaling.maxReplicas` or change the lag threshold. The default 36 partitions leave room above the initial ceiling of 12. KEDA owns the writer HPA, and database maintenance pauses it at zero. CI rejects Kafka partition decreases. See [consumer operations](kafka-consumers.md) for expansion, broker reassignment and adapter ownership.
+
+**Existing ClickHouse retention:** `CREATE TABLE IF NOT EXISTS` does not modify an existing table's TTL. A retention change requires reviewed `ALTER TABLE ... ON CLUSTER ... MODIFY TTL ...` for both local tables (`logs_local` and `log_events_local`). Keep schema migrations explicit and forward-compatible; Git reverting a chart cannot reverse stored data or storage formats.
 
 For a rollback, revert the configuration commit and watch Flux plus rollout status. For a failed stateful migration, use the component-specific recovery procedure; automatic Helm uninstall/remediation is disabled. Emergency changes require suspending the relevant HelmRelease, documenting the change in Git, then resuming it. Avoid suspending the whole observability platform for an isolated dashboard edit.
 

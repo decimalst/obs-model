@@ -49,7 +49,13 @@ def vector_tests():
                     "type": "log",
                     "log_fields": {
                         "message": json.dumps(
-                            {"level": level, "message": "test", "service_key": "spoofed/id"}
+                            {
+                                "level": level,
+                                "message": "test",
+                                "service_key": "spoofed/id",
+                                "cluster_name": "spoofed",
+                                "event_id": "spoofed",
+                            }
                         ),
                         "kubernetes": {
                             "pod_namespace": "apps",
@@ -69,6 +75,8 @@ def vector_tests():
                             "type": "vrl",
                             "source": (
                                 'assert_eq!(.service_key, "apps/api")\n'
+                                'assert_eq!(.cluster_name, "olly-us-east-1")\n'
+                                'assert!(.event_id != "spoofed")\n'
                                 "assert!(!exists(.debug_allowed))"
                             ),
                         }

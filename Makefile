@@ -60,3 +60,11 @@ collector-test:
 rules-test:
 	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml
 	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml
+
+.PHONY: sharding-test
+sharding-test:
+	$(PYTHON) scripts/sharding_test.py
+
+.PHONY: consumer-test
+consumer-test:
+	$(PYTHON) scripts/consumer_test.py

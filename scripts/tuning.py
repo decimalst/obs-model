@@ -28,7 +28,9 @@ ALLOWED = {
     },
     "collectors": {k: None for k in DEFAULTS["collectors"] if k != "replicas"},
     "autoscaling": {k: None for k in DEFAULTS["autoscaling"]},
+    "writerAutoscaling": {k: None for k in DEFAULTS["writerAutoscaling"]},
     "scaling": {k: None for k in DEFAULTS["scaling"]},
+    "clickhouse": {"shards": None, "insertQuorumTimeoutMs": None, "pauseWrites": None},
     "resources": {
         role: {kind: {key: None for key in resource[kind]} for kind in resource}
         for role, resource in DEFAULTS["resources"].items()
@@ -87,7 +89,7 @@ def validate_tuning(tuning):
     scaling = full["scaling"]
     if (
         full["autoscaling"]["enabled"]
-        and scaling["writerReplicas"] > full["autoscaling"]["maxReplicas"]
+        and scaling["writerReplicas"] > full["writerAutoscaling"]["maxReplicas"]
     ):
         raise ValueError("writerReplicas cannot exceed the HPA maximum")
     if scaling["writerReplicas"] > scaling["logPartitions"]:
