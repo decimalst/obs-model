@@ -1,0 +1,213 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keeper-config
+data:
+  keeper.xml: |
+    <clickhouse>
+      <logger><level>warning</level><console>1</console></logger>
+      <listen_host>0.0.0.0</listen_host>
+      <keeper_server>
+        <tcp_port>9181</tcp_port>
+        <server_id from_env="KEEPER_ID"/>
+        <log_storage_path>/var/lib/clickhouse-keeper/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse-keeper/snapshots</snapshot_storage_path>
+        <coordination_settings><operation_timeout_ms>10000</operation_timeout_ms><session_timeout_ms>30000</session_timeout_ms><raft_logs_level>warning</raft_logs_level></coordination_settings>
+        <raft_configuration>
+        {{- range $i := until 3 }}
+          <server><id>{{ $i }}</id><hostname>keeper-{{ $i }}.keeper-peer</hostname><port>9234</port></server>
+        {{- end }}
+        </raft_configuration>
+      </keeper_server>
+    </clickhouse>
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keeper
+spec:
+  serviceName: keeper-peer
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: {app: keeper}
+  template:
+    metadata:
+      labels: {app: keeper}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+      {{- include "olly.spread" "keeper" | nindent 6 }}
+      containers:
+        - name: keeper
+          image: {{ .Values.images.keeper }}
+          command: ["/bin/bash", "-ec"]
+          args:
+            - 'export KEEPER_ID="${HOSTNAME##*-}"; exec clickhouse-keeper --config-file=/conf/keeper.xml'
+          ports:
+            - {name: client, containerPort: 9181}
+            - {name: raft, containerPort: 9234}
+          readinessProbe:
+            tcpSocket: {port: client}
+          livenessProbe:
+            tcpSocket: {port: client}
+            initialDelaySeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          volumeMounts:
+            - {name: config, mountPath: /conf, readOnly: true}
+            - {name: data, mountPath: /var/lib/clickhouse-keeper}
+      volumes:
+        - name: config
+          configMap: {name: keeper-config}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: {{ .Values.storageClass }}
+        resources:
+          requests: {storage: 10Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keeper-peer
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector: {app: keeper}
+  ports:
+    - {name: client, port: 9181}
+    - {name: raft, port: 9234}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: keeper
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: keeper}
+---
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: observability
+spec:
+  defaults:
+    templates:
+      podTemplate: data
+      dataVolumeClaimTemplate: data
+  configuration:
+    zookeeper:
+      nodes:
+        {{- range $i := until 3 }}
+        - host: keeper-{{ $i }}.keeper-peer
+          port: 9181
+        {{- end }}
+    clusters:
+      - name: logs
+        layout:
+          shardsCount: 1
+          replicasCount: 3
+    profiles:
+      default/log_queries: 1
+      default/max_memory_usage: 2000000000
+      default/insert_quorum: 2
+      default/insert_quorum_parallel: 1
+      readonly/readonly: 1
+    users:
+      default/networks/ip: "127.0.0.1"
+      writer/password:
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.logs.secretName }}
+            key: password
+      writer/networks/ip: "{{ .Values.networkPolicy.vpcCIDR }}"
+      writer/profile: default
+      reader/password:
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.logs.secretName }}
+            key: password
+      reader/networks/ip: "{{ .Values.networkPolicy.vpcCIDR }}"
+      reader/profile: readonly
+  templates:
+    podTemplates:
+      - name: data
+        spec:
+          automountServiceAccountToken: false
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      clickhouse.altinity.com/chi: observability
+                  topologyKey: topology.kubernetes.io/zone
+          containers:
+            - name: clickhouse
+              image: {{ .Values.images.clickhouse }}
+              resources:
+                requests: {cpu: "500m", memory: 2Gi}
+                limits: {cpu: "2", memory: 4Gi}
+    volumeClaimTemplates:
+      - name: data
+        reclaimPolicy: Retain
+        spec:
+          accessModes: [ReadWriteOnce]
+          storageClassName: {{ .Values.storageClass }}
+          resources:
+            requests:
+              storage: {{ .Values.logs.clickhouseStorage }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clickhouse
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      clickhouse.altinity.com/chi: observability
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-schema
+data:
+  schema.sql: |
+    CREATE DATABASE IF NOT EXISTS observability ON CLUSTER logs;
+    CREATE TABLE IF NOT EXISTS observability.logs ON CLUSTER logs
+    (
+      timestamp DateTime64(3, 'UTC'),
+      service_key LowCardinality(String),
+      service_name LowCardinality(String),
+      namespace LowCardinality(String),
+      level LowCardinality(String),
+      message String CODEC(ZSTD(3)),
+      trace_id String
+    )
+    ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/logs', '{replica}')
+    PARTITION BY toDate(timestamp)
+    ORDER BY (namespace, service_name, timestamp)
+    TTL timestamp + INTERVAL {{ .Values.logs.retentionDays }} DAY DELETE;
+    CREATE TABLE IF NOT EXISTS observability.log_events ON CLUSTER logs
+    (
+      minute DateTime('UTC'),
+      service_key LowCardinality(String),
+      level LowCardinality(String),
+      count UInt64
+    )
+    ENGINE = ReplicatedSummingMergeTree('/clickhouse/tables/{shard}/log_events', '{replica}')
+    PARTITION BY toDate(minute)
+    ORDER BY (service_key, level, minute)
+    TTL minute + INTERVAL {{ .Values.logs.retentionDays }} DAY DELETE;
+    CREATE MATERIALIZED VIEW IF NOT EXISTS observability.log_events_mv ON CLUSTER logs
+    TO observability.log_events AS
+    SELECT toStartOfMinute(timestamp) AS minute, service_key, level, count() AS count
+    FROM observability.logs GROUP BY minute, service_key, level;

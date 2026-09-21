@@ -1,0 +1,24 @@
+dependencies:
+- name: cert-manager
+  repository: https://charts.jetstack.io
+  version: v1.21.2
+- name: argo-rollouts
+  repository: https://argoproj.github.io/argo-helm
+  version: 2.43.2
+- name: strimzi-kafka-operator
+  repository: https://strimzi.io/charts
+  version: 1.2.0
+- name: opentelemetry-operator
+  repository: https://open-telemetry.github.io/opentelemetry-helm-charts
+  version: 0.123.0
+- name: altinity-clickhouse-operator
+  repository: https://helm.altinity.com
+  version: 0.27.3
+- name: cluster-autoscaler
+  repository: https://kubernetes.github.io/autoscaler
+  version: 9.59.0
+- name: metrics-server
+  repository: https://kubernetes-sigs.github.io/metrics-server
+  version: 3.14.0
+digest: sha256:74086341c5e6eb53c1de921bffec671a9dffe925be69a93b277719473ffa1a1b
+generated: "2026-09-21T11:10:21.097232-04:00"

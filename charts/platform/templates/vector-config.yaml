@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-agent
+  labels:
+    {{- include "olly.labels" . | nindent 4 }}
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+    sources:
+      kubernetes:
+        type: kubernetes_logs
+        self_node_name: ${VECTOR_SELF_NODE_NAME}
+        extra_namespace_label_selector: "observability/collect=true"
+        # Fair reads stop a flood file from monopolizing the node agent.
+        oldest_first: false
+        max_read_bytes: 2048
+        max_line_bytes: 32768
+        max_merged_line_bytes: 32768
+      internal:
+        type: internal_metrics
+    transforms:
+      identify:
+        type: remap
+        inputs: [kubernetes]
+        source: |
+          .service_key = (string(.kubernetes.pod_namespace) ?? "unknown") + "/" + (string(.kubernetes.pod_labels."observability/service") ?? "unclassified")
+      normalize:
+        type: remap
+        inputs: [node_budget]
+        source: |
+{{ .Files.Get "files/normalize.vrl" | indent 10 }}
+      debug_gate:
+        type: filter
+        inputs: [normalize]
+        condition: '!includes(["DEBUG", "TRACE"], .level) || .debug_allowed == true'
+      node_budget:
+        type: throttle
+        inputs: [identify]
+        key_field: '{{ "{{ service_key }}" }}'
+        threshold: {{ .Values.logs.agentEventsPerSecond }}
+        window_secs: 1
+      cleanup:
+        type: remap
+        inputs: [debug_gate]
+        source: 'del(.debug_allowed)'
+    sinks:
+      quota:
+        type: http
+        inputs: [cleanup]
+        uri: http://log-quota:8080/ingest
+        method: post
+        compression: none
+        encoding:
+          codec: json
+        framing:
+          method: newline_delimited
+        batch:
+          max_events: 256
+          max_bytes: 1048576
+          timeout_secs: 1
+        request:
+          concurrency: 2
+          timeout_secs: 15
+        buffer:
+          type: disk
+          max_size: 536870912
+          when_full: block
+        healthcheck:
+          enabled: false
+      metrics:
+        type: prometheus_exporter
+        inputs: [internal]
+        address: 0.0.0.0:9090
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-gateway
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+    sources:
+      admitted:
+        type: http_server
+        address: 0.0.0.0:8080
+        decoding:
+          codec: json
+        framing:
+          method: newline_delimited
+      internal:
+        type: internal_metrics
+    sinks:
+      kafka:
+        type: kafka
+        inputs: [admitted]
+        bootstrap_servers: telemetry-kafka-bootstrap:9092
+        topic: logs
+        acknowledgements:
+          enabled: true
+        key_field: service_key
+        compression: zstd
+        encoding:
+          codec: json
+        librdkafka_options:
+          "request.required.acks": "-1"
+          "enable.idempotence": "true"
+        buffer:
+          type: memory
+          max_events: 2048
+          when_full: block
+      metrics:
+        type: prometheus_exporter
+        inputs: [internal]
+        address: 0.0.0.0:9090
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-writer
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+    sources:
+      kafka:
+        type: kafka
+        bootstrap_servers: telemetry-kafka-bootstrap:9092
+        group_id: clickhouse-writer-v1
+        topics: [logs]
+        auto_offset_reset: earliest
+        decoding:
+          codec: json
+      internal:
+        type: internal_metrics
+    sinks:
+      clickhouse:
+        type: clickhouse
+        inputs: [kafka]
+        endpoint: http://clickhouse-observability:8123
+        database: observability
+        table: logs
+        skip_unknown_fields: true
+        date_time_best_effort: true
+        acknowledgements:
+          enabled: true
+        auth:
+          strategy: basic
+          user: writer
+          password: ${CLICKHOUSE_PASSWORD}
+        batch:
+          max_events: 1000
+          timeout_secs: 2
+        buffer:
+          type: memory
+          max_events: 4096
+          when_full: block
+      metrics:
+        type: prometheus_exporter
+        inputs: [internal]
+        address: 0.0.0.0:9090

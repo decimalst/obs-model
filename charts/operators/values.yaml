@@ -1,0 +1,111 @@
+cert-manager:
+  crds:
+    enabled: true
+  replicaCount: 2
+  webhook:
+    replicaCount: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: webhook
+              app.kubernetes.io/component: webhook
+          topologyKey: topology.kubernetes.io/zone
+  cainjector:
+    replicaCount: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: cainjector
+              app.kubernetes.io/component: cainjector
+          topologyKey: topology.kubernetes.io/zone
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: cert-manager
+            app.kubernetes.io/component: controller
+        topologyKey: topology.kubernetes.io/zone
+argo-rollouts:
+  controller:
+    replicas: 2
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: rollouts-controller
+              app.kubernetes.io/name: argo-rollouts
+          topologyKey: topology.kubernetes.io/zone
+strimzi-kafka-operator:
+  replicas: 2
+  watchNamespaces:
+  - observability
+  leaderElection:
+    enable: true
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            name: strimzi-cluster-operator
+            strimzi.io/kind: cluster-operator
+        topologyKey: topology.kubernetes.io/zone
+opentelemetry-operator:
+  replicaCount: 2
+  manager:
+    collectorImage:
+      repository: otel/opentelemetry-collector-contrib
+      tag: 0.148.0
+  admissionWebhooks:
+    certManager:
+      enabled: true
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: opentelemetry-operator
+            app.kubernetes.io/component: controller-manager
+        topologyKey: topology.kubernetes.io/zone
+altinity-clickhouse-operator:
+  watchNamespaces:
+  - observability
+  crdHook:
+    enabled: false
+    image:
+      repository: registry.k8s.io/kubectl
+      tag: v1.35.0
+cluster-autoscaler:
+  cloudProvider: aws
+  awsRegion: us-east-1
+  autoDiscovery:
+    clusterName: olly-us-east-1
+  replicaCount: 2
+  rbac:
+    serviceAccount:
+      name: cluster-autoscaler
+  extraArgs:
+    balance-similar-node-groups: true
+    expander: least-waste
+    skip-nodes-with-local-storage: false
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: aws-cluster-autoscaler
+        topologyKey: topology.kubernetes.io/zone
+metrics-server:
+  replicas: 2
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: metrics-server
+        topologyKey: topology.kubernetes.io/zone

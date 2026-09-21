@@ -1,0 +1,5 @@
+*
+!*.go
+!*.lua
+!go.mod
+!go.sum

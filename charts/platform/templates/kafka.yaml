@@ -1,0 +1,73 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: quorum
+  labels:
+    strimzi.io/cluster: telemetry
+spec:
+  replicas: 3
+  roles: [controller, broker]
+  storage:
+    type: persistent-claim
+    size: {{ .Values.logs.kafkaStorage }}
+    class: {{ .Values.storageClass }}
+    deleteClaim: false
+  resources:
+    requests: {cpu: "500m", memory: 2Gi}
+    limits: {cpu: "2", memory: 4Gi}
+  template:
+    pod:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: {strimzi.io/cluster: telemetry, strimzi.io/pool-name: quorum}
+              topologyKey: topology.kubernetes.io/zone
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: telemetry
+spec:
+  kafka:
+    version: 4.2.1
+    metadataVersion: 4.2-IV1
+    rack:
+      topologyKey: topology.kubernetes.io/zone
+    listeners:
+      - name: internal
+        port: 9092
+        type: internal
+        tls: false
+        networkPolicyPeers:
+          - podSelector: {}
+    config:
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      auto.create.topics.enable: false
+      log.retention.hours: {{ .Values.logs.kafkaRetentionHours }}
+      replica.selector.class: org.apache.kafka.common.replica.RackAwareReplicaSelector
+    template:
+      podDisruptionBudget:
+        maxUnavailable: 1
+  entityOperator:
+    topicOperator: {}
+{{- range $topic := list "logs" "mimir-ingest" }}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: {{ $topic }}
+  labels:
+    strimzi.io/cluster: telemetry
+spec:
+  partitions: {{ if eq $topic "logs" }}12{{ else }}1{{ end }}
+  replicas: 3
+  config:
+    min.insync.replicas: 2
+    retention.ms: {{ mul $.Values.logs.kafkaRetentionHours 3600000 | quote }}
+    compression.type: producer
+{{- end }}

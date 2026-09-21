@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: gomod
+    directory: /services/log-quota
+    schedule: {interval: weekly}
+  - package-ecosystem: pip
+    directory: /
+    schedule: {interval: weekly}
+  - package-ecosystem: terraform
+    directories: [/terraform/modules/region, /terraform/live/us-east-1, /terraform/live/us-west-2]
+    schedule: {interval: weekly}
+  - package-ecosystem: docker
+    directory: /services/log-quota
+    schedule: {interval: weekly}

@@ -1,0 +1,1 @@
+The optional Flink controller is installed. Supply and test a job image before enabling flink.enabled.

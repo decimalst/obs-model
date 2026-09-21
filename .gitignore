@@ -1,0 +1,15 @@
+.venv/
+.cache/
+build/
+**/.terraform/
+*.tfstate*
+*.tfplan
+*.auto.tfvars*
+*.tfvars
+!*.example.tfvars
+*.secret.yaml
+.env
+__pycache__/
+.ruff_cache/
+.DS_Store
+charts/*/charts/

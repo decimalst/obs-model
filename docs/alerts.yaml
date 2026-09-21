@@ -1,0 +1,20 @@
+name: observability-protection
+rules:
+  - alert: LogAdmissionDependencyUnavailable
+    expr: sum(rate(log_quota_unavailable_total[5m])) > 0
+    for: 2m
+    labels: {severity: warning}
+    annotations:
+      summary: Log admission is failing closed because a dependency is unavailable
+  - alert: LogQuotaDropsSustained
+    expr: sum(rate(log_quota_dropped_total[5m])) / clamp_min(sum(rate(log_quota_dropped_total[5m]) + rate(log_quota_accepted_total[5m])), 1) > 0.1
+    for: 10m
+    labels: {severity: warning}
+    annotations:
+      summary: More than 10 percent of presented log events are being dropped by quota
+  - alert: OTelRefusedSpans
+    expr: sum(rate(otelcol_processor_refused_spans[5m])) > 0
+    for: 5m
+    labels: {severity: warning}
+    annotations:
+      summary: Trace collectors are refusing spans under pressure

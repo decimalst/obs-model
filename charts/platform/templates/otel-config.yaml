@@ -1,0 +1,142 @@
+{{- range $role := list "agent" "metrics" "router" "traces" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-{{ $role }}
+data:
+  collector.yaml: |
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+            max_recv_msg_size_mib: 4
+            max_concurrent_streams: 64
+          http:
+            endpoint: 0.0.0.0:4318
+    {{- if eq $role "agent" }}
+      kubeletstats:
+        collection_interval: 30s
+        auth_type: serviceAccount
+        endpoint: https://${env:K8S_NODE_NAME}:10250
+        insecure_skip_verify: false
+        metric_groups: [node, pod, container]
+    {{- end }}
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch:
+        timeout: 1s
+        send_batch_size: 512
+        send_batch_max_size: 1024
+      resource:
+        attributes:
+          - key: cloud.region
+            value: {{ $.Values.region }}
+            action: upsert
+          - key: k8s.cluster.name
+            value: {{ $.Values.clusterName }}
+            action: upsert
+    {{- if eq $role "traces" }}
+      tail_sampling:
+        decision_wait: {{ $.Values.collectors.traceDecisionWaitSeconds }}s
+        num_traces: {{ $.Values.collectors.maxTraces }}
+        expected_new_traces_per_sec: 1000
+        decision_cache:
+          sampled_cache_size: 100000
+          non_sampled_cache_size: 100000
+        policies:
+          - name: bounded-priority
+            type: composite
+            composite:
+              max_total_spans_per_second: {{ $.Values.collectors.traceSpansPerSecond }}
+              policy_order: [errors, slow, baseline]
+              composite_sub_policy:
+                - name: errors
+                  type: status_code
+                  status_code:
+                    status_codes: [ERROR]
+                - name: slow
+                  type: latency
+                  latency:
+                    threshold_ms: 1000
+                - name: baseline
+                  type: probabilistic
+                  probabilistic:
+                    sampling_percentage: {{ $.Values.collectors.traceSamplingPercent }}
+              rate_allocation:
+                - policy: errors
+                  percent: 50
+                - policy: slow
+                  percent: 25
+                - policy: baseline
+                  percent: 25
+    {{- end }}
+    exporters:
+    {{- if eq $role "agent" }}
+      otlp/metrics:
+        endpoint: otel-metrics:4317
+        tls: {insecure: true}
+        sending_queue: {queue_size: 1024, num_consumers: 4}
+      otlp/traces:
+        endpoint: otel-router:4317
+        tls: {insecure: true}
+        sending_queue: {queue_size: 1024, num_consumers: 4}
+    {{- else if eq $role "metrics" }}
+      prometheusremotewrite:
+        endpoint: http://mimir-gateway/api/v1/push
+        headers: {X-Scope-OrgID: platform}
+        resource_to_telemetry_conversion:
+          enabled: false
+        remote_write_queue:
+          queue_size: 1024
+          num_consumers: 1
+    {{- else if eq $role "router" }}
+      loadbalancing:
+        routing_key: traceID
+        protocol:
+          otlp:
+            tls: {insecure: true}
+            sending_queue: {queue_size: 1024, num_consumers: 4}
+        resolver:
+          static:
+            hostnames:
+            {{- range $i := until (int $.Values.collectors.replicas) }}
+              - otel-traces-{{ $i }}.otel-traces-peer.{{ $.Release.Namespace }}.svc.cluster.local:4317
+            {{- end }}
+    {{- else }}
+      otlp/tempo:
+        endpoint: tempo-distributor:4317
+        tls: {insecure: true}
+        sending_queue: {queue_size: 1024, num_consumers: 4}
+    {{- end }}
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+      pipelines:
+    {{- if or (eq $role "agent") (eq $role "metrics") }}
+        metrics:
+          receivers: [otlp{{ if eq $role "agent" }}, kubeletstats{{ end }}]
+          processors: [memory_limiter, resource, batch]
+          exporters: [{{ if eq $role "agent" }}otlp/metrics{{ else }}prometheusremotewrite{{ end }}]
+    {{- end }}
+    {{- if ne $role "metrics" }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, {{ if eq $role "traces" }}tail_sampling, {{ end }}batch]
+          exporters: [{{ if eq $role "agent" }}otlp/traces{{ else if eq $role "router" }}loadbalancing{{ else }}otlp/tempo{{ end }}]
+    {{- end }}
+{{- end }}

@@ -1,0 +1,335 @@
+region: us-east-1
+clusterName: olly-us-east-1
+storageClass: gp3-encrypted
+images:
+  vector: timberio/vector:0.54.0-debian
+  otel: otel/opentelemetry-collector-contrib:0.148.0
+  quota: observability/log-quota:0.1.0
+  clickhouse: clickhouse/clickhouse-server:25.8.33.6
+  keeper: clickhouse/clickhouse-keeper:25.8.33.6
+  curl: curlimages/curl:8.18.0
+quota:
+  replicas: 3
+  redisAddress: quota.example.cache.amazonaws.com:6379
+  redisTLS: true
+  secretName: quota-redis
+  eventsPerSecond: 1000
+  eventBurst: 2000
+  bytesPerSecond: 1048576
+  byteBurst: 2097152
+  debugEventsPerSecond: 100
+  debugEventBurst: 200
+  debugBytesPerSecond: 102400
+  debugByteBurst: 204800
+logs:
+  agentEventsPerSecond: 500
+  retentionDays: 7
+  kafkaRetentionHours: 24
+  kafkaStorage: 100Gi
+  clickhouseStorage: 100Gi
+  secretName: clickhouse-auth
+  maxDebugHours: 24
+collectors:
+  replicas: 3
+  traceSamplingPercent: 10
+  traceSpansPerSecond: 2000
+  traceDecisionWaitSeconds: 30
+  maxTraces: 50000
+  scrapeInterval: 30s
+  scrapeSampleLimit: 10000
+  scrapeNamespaces:
+  - observability
+autoscaling:
+  enabled: true
+  maxReplicas: 12
+  targetCPU: 70
+rollouts:
+  enabled: true
+  autoPromotionEnabled: false
+  scaleDownDelaySeconds: 60
+networkPolicy:
+  enabled: true
+  clientNamespaceLabel: observability/collect
+  vpcCIDR: 10.40.0.0/16
+flink:
+  enabled: false
+  image: ''
+  jarURI: ''
+  checkpointBucket: ''
+  parallelism: 3
+mimir:
+  fullnameOverride: mimir
+  minio:
+    enabled: false
+  kafka:
+    enabled: false
+  serviceAccount:
+    create: true
+    name: mimir
+  global:
+    podLabels:
+      observability/backend: 'true'
+  mimir:
+    structuredConfig:
+      multitenancy_enabled: true
+      common:
+        storage:
+          backend: s3
+          s3:
+            endpoint: s3.us-east-1.amazonaws.com
+            region: us-east-1
+      blocks_storage:
+        s3:
+          bucket_name: REPLACE-mimir-blocks
+      ruler_storage:
+        s3:
+          bucket_name: REPLACE-mimir-ruler
+      alertmanager_storage:
+        s3:
+          bucket_name: REPLACE-mimir-alertmanager
+      ingest_storage:
+        enabled: true
+        kafka:
+          address: telemetry-kafka-bootstrap:9092
+          topic: mimir-ingest
+          auto_create_topic_enabled: false
+      limits:
+        ingestion_rate: 50000
+        ingestion_burst_size: 100000
+        max_global_series_per_user: 1000000
+        compactor_blocks_retention_period: 15d
+        max_query_parallelism: 16
+  ingester:
+    replicas: 3
+    zoneAwareReplication:
+      enabled: true
+      zones: &id001
+      - name: a
+        nodeSelector:
+          topology.kubernetes.io/zone: us-east-1a
+      - name: b
+        nodeSelector:
+          topology.kubernetes.io/zone: us-east-1b
+      - name: c
+        nodeSelector:
+          topology.kubernetes.io/zone: us-east-1c
+    persistentVolume:
+      size: 20Gi
+      storageClass: gp3-encrypted
+    resources:
+      requests:
+        cpu: 500m
+        memory: 2Gi
+      limits:
+        memory: 4Gi
+  store_gateway:
+    replicas: 3
+    zoneAwareReplication:
+      enabled: true
+      zones: *id001
+    persistentVolume:
+      size: 20Gi
+      storageClass: gp3-encrypted
+  alertmanager:
+    replicas: 3
+    zoneAwareReplication:
+      enabled: true
+      zones: *id001
+    persistentVolume:
+      size: 2Gi
+      storageClass: gp3-encrypted
+  compactor:
+    replicas: 2
+    persistentVolume:
+      size: 20Gi
+      storageClass: gp3-encrypted
+  distributor:
+    replicas: 3
+  querier:
+    replicas: 3
+  query_frontend:
+    replicas: 2
+  query_scheduler:
+    replicas: 2
+  ruler:
+    replicas: 2
+  gateway:
+    replicas: 2
+  nginx:
+    enabled: false
+  rollout_operator:
+    enabled: true
+tempo:
+  fullnameOverride: tempo
+  serviceAccount:
+    create: true
+    name: tempo
+  ingester:
+    replicas: 3
+    zoneAwareReplication:
+      enabled: true
+      zones: *id001
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: gp3-encrypted
+    config:
+      replication_factor: 3
+  distributor:
+    replicas: 3
+  querier:
+    replicas: 2
+  queryFrontend:
+    replicas: 2
+  compactor:
+    replicas: 2
+    config:
+      compaction:
+        block_retention: 72h
+  traces:
+    otlp:
+      grpc:
+        enabled: true
+      http:
+        enabled: true
+  storage:
+    trace:
+      backend: s3
+      s3:
+        bucket: REPLACE-tempo
+        endpoint: s3.us-east-1.amazonaws.com
+        region: us-east-1
+        insecure: false
+  overrides:
+    defaults:
+      ingestion:
+        rate_strategy: global
+        rate_limit_bytes: 5000000
+        burst_size_bytes: 10000000
+      global:
+        max_bytes_per_trace: 5000000
+grafana:
+  fullnameOverride: grafana
+  replicas: 2
+  podLabels:
+    observability/backend: 'true'
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  envFromSecret: grafana-db
+  grafana.ini:
+    database:
+      type: postgres
+      host: $__env{GF_DATABASE_HOST}
+      name: grafana
+      user: grafana
+      password: $__env{GF_DATABASE_PASSWORD}
+      ssl_mode: require
+    auth.anonymous:
+      enabled: false
+    security:
+      cookie_secure: true
+    unified_alerting:
+      enabled: false
+  plugins:
+  - grafana-clickhouse-datasource 4.11.2
+  envValueFrom:
+    CLICKHOUSE_PASSWORD:
+      secretKeyRef:
+        name: clickhouse-auth
+        key: password
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Regional metrics
+        uid: mimir
+        type: prometheus
+        url: http://mimir-gateway/prometheus
+        access: proxy
+        isDefault: true
+        jsonData:
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: platform
+      - name: Regional traces
+        uid: tempo
+        type: tempo
+        url: http://tempo-query-frontend:3200
+        access: proxy
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: clickhouse
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+      - name: Regional logs
+        uid: clickhouse
+        type: grafana-clickhouse-datasource
+        jsonData:
+          host: clickhouse-observability
+          port: 8123
+          protocol: http
+          username: reader
+          defaultDatabase: observability
+        secureJsonData:
+          password: $CLICKHOUSE_PASSWORD
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: grafana
+        topologyKey: topology.kubernetes.io/zone
+  podDisruptionBudget:
+    minAvailable: 1
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+      - name: default
+        orgId: 1
+        folder: Platform
+        type: file
+        disableDeletion: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      regional-overview:
+        json: "{\n  \"uid\": \"regional-overview\",\n  \"title\": \"Regional observability\
+          \ health\",\n  \"schemaVersion\": 39,\n  \"version\": 1,\n  \"refresh\"\
+          : \"30s\",\n  \"time\": {\n    \"from\": \"now-1h\",\n    \"to\": \"now\"\
+          \n  },\n  \"panels\": [\n    {\n      \"id\": 1,\n      \"title\": \"Admitted\
+          \ log events / second\",\n      \"type\": \"timeseries\",\n      \"datasource\"\
+          : {\n        \"type\": \"prometheus\",\n        \"uid\": \"mimir\"\n   \
+          \   },\n      \"gridPos\": {\n        \"x\": 0,\n        \"y\": 0,\n   \
+          \     \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\": [\n   \
+          \     {\n          \"expr\": \"sum(rate(log_quota_accepted_total[5m]))\"\
+          ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n     \
+          \ \"id\": 2,\n      \"title\": \"Log events intentionally dropped / second\"\
+          ,\n      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"\
+          type\": \"prometheus\",\n        \"uid\": \"mimir\"\n      },\n      \"\
+          gridPos\": {\n        \"x\": 12,\n        \"y\": 0,\n        \"w\": 12,\n\
+          \        \"h\": 8\n      },\n      \"targets\": [\n        {\n         \
+          \ \"expr\": \"sum(rate(log_quota_dropped_total[5m]))\",\n          \"refId\"\
+          : \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 3,\n      \"title\"\
+          : \"Log admission dependency failures / second\",\n      \"type\": \"timeseries\"\
+          ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"\
+          uid\": \"mimir\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n  \
+          \      \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n     \
+          \ \"targets\": [\n        {\n          \"expr\": \"sum(rate(log_quota_unavailable_total[5m]))\"\
+          ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n     \
+          \ \"id\": 4,\n      \"title\": \"OTel refused metric points / second\",\n\
+          \      \"type\": \"timeseries\",\n      \"datasource\": {\n        \"type\"\
+          : \"prometheus\",\n        \"uid\": \"mimir\"\n      },\n      \"gridPos\"\
+          : {\n        \"x\": 12,\n        \"y\": 8,\n        \"w\": 12,\n       \
+          \ \"h\": 8\n      },\n      \"targets\": [\n        {\n          \"expr\"\
+          : \"sum(rate(otelcol_processor_refused_metric_points[5m]))\",\n        \
+          \  \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"id\": 5,\n\
+          \      \"title\": \"OTel refused spans / second\",\n      \"type\": \"timeseries\"\
+          ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"\
+          uid\": \"mimir\"\n      },\n      \"gridPos\": {\n        \"x\": 0,\n  \
+          \      \"y\": 16,\n        \"w\": 12,\n        \"h\": 8\n      },\n    \
+          \  \"targets\": [\n        {\n          \"expr\": \"sum(rate(otelcol_processor_refused_spans[5m]))\"\
+          ,\n          \"refId\": \"A\"\n        }\n      ]\n    }\n  ]\n}"

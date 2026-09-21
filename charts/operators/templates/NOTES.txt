@@ -1,0 +1,1 @@
+Controllers are installed. Use scripts/deploy.sh to prepare CRDs and deploy the regional platform in order.

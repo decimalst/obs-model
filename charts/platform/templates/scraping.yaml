@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-scrape
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-otel-scrape
+rules:
+  - apiGroups: [""]
+    resources: [pods, nodes, namespaces, services, endpoints]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-otel-scrape
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-otel-scrape
+subjects:
+  - kind: ServiceAccount
+    name: otel-scrape
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel-scrape
+spec:
+  mode: statefulset
+  replicas: 3
+  image: {{ .Values.images.otel }}
+  serviceAccount: otel-scrape
+  targetAllocator:
+    enabled: true
+    replicas: 2
+    podDisruptionBudget:
+      minAvailable: 1
+    resources:
+      requests: {cpu: 100m, memory: 128Mi}
+      limits: {cpu: "1", memory: 512Mi}
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: topology.kubernetes.io/zone
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: otel-scrape-targetallocator
+    serviceAccount: otel-scrape
+    allocationStrategy: consistent-hashing
+    prometheusCR:
+      enabled: false
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: otel-scrape-collector
+  config:
+    receivers:
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: annotated-pods
+              scrape_interval: {{ .Values.collectors.scrapeInterval }}
+              scrape_timeout: 10s
+              sample_limit: {{ .Values.collectors.scrapeSampleLimit }}
+              label_limit: 40
+              label_name_length_limit: 128
+              label_value_length_limit: 512
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces:
+                    names: {{ .Values.collectors.scrapeNamespaces | toJson }}
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  action: keep
+                  regex: "true"
+                - source_labels: [__meta_kubernetes_pod_phase]
+                  action: keep
+                  regex: Running
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_port]
+                  target_label: __tmp_metrics_port
+                - source_labels: [__meta_kubernetes_pod_container_port_number]
+                  action: keepequal
+                  target_label: __tmp_metrics_port
+                - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  action: replace
+                  regex: '([^:]+)(?::\d+)?;(\d+)'
+                  replacement: '$$1:$$2'
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: namespace
+              metric_relabel_configs:
+                - action: labeldrop
+                  regex: '(debug_.*|user_id|request_id|session_id)'
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      batch: {}
+    exporters:
+      otlp:
+        endpoint: otel-metrics:4317
+        tls: {insecure: true}
+    service:
+      pipelines:
+        metrics:
+          receivers: [prometheus]
+          processors: [memory_limiter, batch]
+          exporters: [otlp]

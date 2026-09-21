@@ -1,0 +1,137 @@
+{{- range $type := list "vector" "otel" }}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $type }}-agent
+spec:
+  selector:
+    matchLabels: {app: {{ $type }}-agent}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 1}
+  template:
+    metadata:
+      labels: {app: {{ $type }}-agent}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ if eq $type "vector" }}"9090"{{ else }}"8888"{{ end }}
+        checksum/config: {{ include (print $.Template.BasePath "/" $type "-config.yaml") $ | sha256sum }}
+    spec:
+      serviceAccountName: {{ $type }}-agent
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: 60
+      tolerations:
+        - {operator: Exists, effect: NoSchedule}
+      containers:
+        - name: collector
+          image: {{ index $.Values.images $type }}
+          args: {{ if eq $type "vector" }}["--config", "/conf/vector.yaml"]{{ else }}["--config=/conf/collector.yaml"]{{ end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            {{- if eq $type "otel" }}
+            runAsNonRoot: true
+            runAsUser: 10001
+            {{- end }}
+            seccompProfile: {type: RuntimeDefault}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          {{- if eq $type "vector" }}
+            - name: VECTOR_SELF_NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          {{- end }}
+          ports:
+            - {name: metrics, containerPort: {{ if eq $type "vector" }}9090{{ else }}8888{{ end }}}
+            - {name: health, containerPort: {{ if eq $type "vector" }}8686{{ else }}13133{{ end }}}
+            {{- if eq $type "otel" }}
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: otlp-http, containerPort: 4318}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: {{ if eq $type "vector" }}/health{{ else }}/{{ end }}, port: health}
+          livenessProbe:
+            httpGet: {path: {{ if eq $type "vector" }}/health{{ else }}/{{ end }}, port: health}
+            initialDelaySeconds: 30
+          volumeMounts:
+            - {name: config, mountPath: /conf, readOnly: true}
+            {{- if eq $type "vector" }}
+            - {name: logs, mountPath: /var/log, readOnly: true}
+            - {name: data, mountPath: /var/lib/vector}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap: {name: {{ $type }}-agent}
+        {{- if eq $type "vector" }}
+        - name: logs
+          hostPath: {path: /var/log, type: Directory}
+        - name: data
+          hostPath: {path: /var/lib/vector, type: DirectoryOrCreate}
+        {{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $type }}-agent
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-agent
+spec:
+  internalTrafficPolicy: Local
+  selector: {app: otel-agent}
+  ports:
+    - {name: grpc, port: 4317, targetPort: otlp-grpc}
+    - {name: http, port: 4318, targetPort: otlp-http}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-vector-agent
+rules:
+  - apiGroups: [""]
+    resources: [pods, namespaces, nodes]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-vector-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-vector-agent
+subjects:
+  - kind: ServiceAccount
+    name: vector-agent
+    namespace: {{ .Release.Namespace }}
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Namespace }}-otel-agent
+rules:
+  - apiGroups: [""]
+    resources: [nodes/stats]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Namespace }}-otel-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Namespace }}-otel-agent
+subjects:
+  - kind: ServiceAccount
+    name: otel-agent
+    namespace: {{ .Release.Namespace }}

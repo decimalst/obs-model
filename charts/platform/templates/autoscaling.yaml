@@ -1,0 +1,28 @@
+{{- if .Values.autoscaling.enabled }}
+{{- range $name := list "log-quota" "vector-gateway" "otel-router" "otel-metrics" }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+spec:
+  scaleTargetRef:
+    apiVersion: {{ if $.Values.rollouts.enabled }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
+    kind: {{ if $.Values.rollouts.enabled }}Rollout{{ else }}Deployment{{ end }}
+    name: {{ $name }}
+  minReplicas: 3
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - {type: Pods, value: 1, periodSeconds: 60}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.autoscaling.targetCPU }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,57 @@
+{{- if .Values.flink.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: flink
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: flink
+rules:
+  - apiGroups: [""]
+    resources: [pods, configmaps, services]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: flink
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: flink}
+subjects:
+  - kind: ServiceAccount
+    name: flink
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: derived-events
+spec:
+  image: {{ required "Provide an application image with the job and S3 filesystem plugin" .Values.flink.image }}
+  flinkVersion: v2_1
+  serviceAccount: flink
+  flinkConfiguration:
+    high-availability.type: kubernetes
+    high-availability.storageDir: s3://{{ required "Provide the regional Flink bucket" .Values.flink.checkpointBucket }}/ha
+    state.checkpoints.dir: s3://{{ .Values.flink.checkpointBucket }}/checkpoints
+    state.savepoints.dir: s3://{{ .Values.flink.checkpointBucket }}/savepoints
+    execution.checkpointing.interval: 60s
+    execution.checkpointing.mode: EXACTLY_ONCE
+    taskmanager.numberOfTaskSlots: "1"
+  jobManager:
+    replicas: 2
+    resource: {memory: 1024m, cpu: 1}
+  taskManager:
+    resource: {memory: 2048m, cpu: 1}
+  podTemplate:
+    spec:
+      {{- include "olly.spread" "derived-events" | nindent 6 }}
+    metadata:
+      labels: {app: derived-events}
+  job:
+    jarURI: {{ required "Provide a job jarURI" .Values.flink.jarURI }}
+    parallelism: {{ .Values.flink.parallelism }}
+    upgradeMode: savepoint
+    state: running
+{{- end }}

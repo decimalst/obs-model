@@ -1,0 +1,6 @@
+flink-kubernetes-operator:
+  replicas: 2
+  watchNamespaces: [observability]
+  defaultConfiguration:
+    flink-conf.yaml: |+
+      kubernetes.operator.leader-election.enabled: true

@@ -1,0 +1,51 @@
+name: temporary-debug-collection
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        type: choice
+        options: [us-east-1, us-west-2]
+        required: true
+      namespace:
+        type: string
+        required: true
+      workload:
+        type: string
+        required: true
+      hours:
+        type: choice
+        options: ['8', '12', '24']
+        default: '8'
+      action:
+        type: choice
+        options: [grant, revoke]
+        default: grant
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: debug-${{ inputs.region }}-${{ inputs.namespace }}-${{ inputs.workload }}
+  cancel-in-progress: false
+jobs:
+  grant:
+    environment: observability-operations
+    # This runner must reach the private regional EKS endpoint.
+    runs-on: [self-hosted, observability-private]
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
+        with:
+          role-to-assume: ${{ vars.OBSERVABILITY_OPERATIONS_ROLE }}
+          aws-region: ${{ inputs.region }}
+      - name: Apply bounded debug grant
+        env:
+          REGION: ${{ inputs.region }}
+          TARGET_NAMESPACE: ${{ inputs.namespace }}
+          WORKLOAD: ${{ inputs.workload }}
+          HOURS: ${{ inputs.hours }}
+          GRANT_ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          aws eks update-kubeconfig --region "$REGION" --name "olly-$REGION"
+          python3 scripts/debug_grants.py "$GRANT_ACTION" --namespace "$TARGET_NAMESPACE" --name "$WORKLOAD" --hours "$HOURS"

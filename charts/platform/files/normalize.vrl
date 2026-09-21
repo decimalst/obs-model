@@ -1,0 +1,24 @@
+# Capture only Kubernetes metadata as the service identity; never trust JSON payload fields.
+namespace = string(.kubernetes.pod_namespace) ?? "unknown"
+service = string(.kubernetes.pod_labels."observability/service") ?? "unclassified"
+annotations = .kubernetes.pod_annotations
+issued = parse_timestamp(string(annotations."observability.good-olly.io/debug-from") ?? "", format: "%+") ?? t'1970-01-01T00:00:00Z'
+until = parse_timestamp(string(annotations."observability.good-olly.io/debug-until") ?? "", format: "%+") ?? t'1970-01-01T00:00:00Z'
+clock = now()
+grant_seconds = to_unix_timestamp(until) - to_unix_timestamp(issued)
+debug_allowed = issued <= clock && clock < until && grant_seconds > 0 && grant_seconds <= 86400
+payload = parse_json(string(.message) ?? "") ?? {}
+level = upcase(string(payload.level) ?? string(payload.severity) ?? "INFO")
+message = string(payload.message) ?? string(.message) ?? ""
+trace_id = string(payload.trace_id) ?? ""
+# Explicit allow-list keeps arbitrary payload keys and grant timestamps out of indexing.
+. = {
+  "timestamp": format_timestamp!(clock, format: "%Y-%m-%d %H:%M:%S%.3f"),
+  "service_key": namespace + "/" + service,
+  "service_name": service,
+  "namespace": namespace,
+  "level": level,
+  "message": message,
+  "trace_id": trace_id,
+  "debug_allowed": debug_allowed
+}

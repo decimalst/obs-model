@@ -1,0 +1,12 @@
+dependencies:
+- name: mimir-distributed
+  repository: https://grafana.github.io/helm-charts
+  version: 6.2.0
+- name: tempo-distributed
+  repository: https://grafana.github.io/helm-charts
+  version: 1.61.3
+- name: grafana
+  repository: https://grafana.github.io/helm-charts
+  version: 10.5.15
+digest: sha256:041fa647845dcf85571cffcfa08387581999766f699711580ed02aa7b9dd054e
+generated: "2026-09-21T10:48:57.075546-04:00"

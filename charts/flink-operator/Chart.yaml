@@ -1,0 +1,8 @@
+apiVersion: v2
+name: observability-flink-operator
+version: 0.1.0
+description: Optional Flink controller for application-specific derived event jobs.
+dependencies:
+  - name: flink-kubernetes-operator
+    version: 1.14.0
+    repository: https://archive.apache.org/dist/flink/flink-kubernetes-operator-1.14.0/

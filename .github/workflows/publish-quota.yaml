@@ -1,0 +1,29 @@
+name: publish-quota-image
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+  checks: read
+jobs:
+  build:
+    environment: observability-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build tested image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          REPOSITORY: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          passed=$(gh api "repos/$REPOSITORY/commits/$REVISION/check-runs" --jq 'any(.check_runs[]; .name == "contracts" and .conclusion == "success")')
+          test "$passed" = true
+          image="ghcr.io/${REPOSITORY,,}/log-quota"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          docker build -t "$image:$REVISION" services/log-quota
+          docker push "$image:$REVISION"
+          docker inspect "$image:$REVISION" --format '{{index .RepoDigests 0}}' >> "$GITHUB_STEP_SUMMARY"

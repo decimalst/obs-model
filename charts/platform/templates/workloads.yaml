@@ -1,0 +1,182 @@
+{{- range $name := list "log-quota" "vector-gateway" "vector-writer" "otel-metrics" "otel-router" "otel-traces" }}
+{{- $vector := hasPrefix "vector-" $name }}
+{{- $otel := hasPrefix "otel-" $name }}
+{{- $sampler := eq $name "otel-traces" }}
+{{- $writer := eq $name "vector-writer" }}
+{{- $bluegreen := and $.Values.rollouts.enabled (not (or $sampler $writer)) }}
+---
+apiVersion: {{ if $bluegreen }}argoproj.io/v1alpha1{{ else }}apps/v1{{ end }}
+kind: {{ if $bluegreen }}Rollout{{ else if $sampler }}StatefulSet{{ else }}Deployment{{ end }}
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "olly.labels" $ | nindent 4 }}
+spec:
+  replicas: {{ if eq $name "log-quota" }}{{ $.Values.quota.replicas }}{{ else }}{{ $.Values.collectors.replicas }}{{ end }}
+  {{- if $sampler }}
+  serviceName: otel-traces-peer
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: OnDelete
+  {{- else if $bluegreen }}
+  strategy:
+    blueGreen:
+      activeService: {{ $name }}
+      previewService: {{ $name }}-preview
+      autoPromotionEnabled: {{ $.Values.rollouts.autoPromotionEnabled }}
+      scaleDownDelaySeconds: {{ $.Values.rollouts.scaleDownDelaySeconds }}
+      prePromotionAnalysis:
+        templates:
+          - templateName: ready-before-promotion
+        args:
+          - name: endpoint
+            value: http://{{ $name }}-preview:{{ if $otel }}13133{{ else if $vector }}8686/health{{ else }}8080/ready{{ end }}
+  {{- else }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  {{- end }}
+  selector:
+    matchLabels: {app: {{ $name }}}
+  template:
+    metadata:
+      labels:
+        app: {{ $name }}
+        {{- include "olly.labels" $ | nindent 8 }}
+      annotations:
+        checksum/config: {{ if $otel }}{{ include (print $.Template.BasePath "/otel-config.yaml") $ | sha256sum }}{{ else if $vector }}{{ include (print $.Template.BasePath "/vector-config.yaml") $ | sha256sum }}{{ else }}{{ $.Values.quota | toJson | sha256sum }}{{ end }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ if $otel }}"8888"{{ else if $vector }}"9090"{{ else }}"8080"{{ end }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ if $sampler }}120{{ else }}60{{ end }}
+      securityContext:
+        {{- include "olly.security" $ | nindent 8 }}
+      {{- include "olly.spread" $name | nindent 6 }}
+      containers:
+        - name: {{ $name }}
+          image: {{ if $otel }}{{ $.Values.images.otel }}{{ else if $vector }}{{ $.Values.images.vector }}{{ else }}{{ $.Values.images.quota }}{{ end }}
+          imagePullPolicy: IfNotPresent
+          {{- if $otel }}
+          args: ["--config=/conf/collector.yaml"]
+          {{- else if $vector }}
+          args: ["--config", "/conf/vector.yaml"]
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: "250m", memory: {{ if $sampler }}"1Gi"{{ else }}"256Mi"{{ end }}}
+            limits: {cpu: "2", memory: {{ if $sampler }}"2Gi"{{ else }}"1Gi"{{ end }}}
+          {{- if eq $name "log-quota" }}
+          env:
+            - {name: REDIS_ADDR, value: {{ $.Values.quota.redisAddress | quote }}}
+            - {name: REDIS_TLS, value: {{ $.Values.quota.redisTLS | quote }}}
+            - {name: VECTOR_URL, value: "http://vector-gateway:8080"}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.quota.secretName }}, key: password}
+            {{- range $key, $value := dict "EVENTS_PER_SECOND" $.Values.quota.eventsPerSecond "EVENT_BURST" $.Values.quota.eventBurst "BYTES_PER_SECOND" $.Values.quota.bytesPerSecond "BYTE_BURST" $.Values.quota.byteBurst "DEBUG_EVENTS_PER_SECOND" $.Values.quota.debugEventsPerSecond "DEBUG_EVENT_BURST" $.Values.quota.debugEventBurst "DEBUG_BYTES_PER_SECOND" $.Values.quota.debugBytesPerSecond "DEBUG_BYTE_BURST" $.Values.quota.debugByteBurst }}
+            - {name: {{ $key }}, value: {{ $value | quote }}}
+            {{- end }}
+          {{- else if $writer }}
+          env:
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.logs.secretName }}, key: password}
+          {{- end }}
+          ports:
+            - {name: health, containerPort: {{ if $otel }}13133{{ else if $vector }}8686{{ else }}8080{{ end }}}
+            {{- if $otel }}
+            - {name: otlp-grpc, containerPort: 4317}
+            - {name: otlp-http, containerPort: 4318}
+            - {name: metrics, containerPort: 8888}
+            {{- else if $vector }}
+            - {name: metrics, containerPort: 9090}
+            {{- if not $writer }}
+            - {name: http, containerPort: 8080}
+            {{- end }}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: {{ if $vector }}/health{{ else if $otel }}/{{ else }}/ready{{ end }}, port: health}
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet: {path: {{ if $vector }}/health{{ else if $otel }}/{{ else }}/live{{ end }}, port: health}
+            initialDelaySeconds: 20
+          {{- if or $otel $vector }}
+          volumeMounts:
+            - {name: config, mountPath: /conf, readOnly: true}
+            {{- if $vector }}
+            - {name: data, mountPath: /var/lib/vector}
+            {{- end }}
+          {{- end }}
+      {{- if or $otel $vector }}
+      volumes:
+        - name: config
+          configMap: {name: {{ $name }}}
+        {{- if $vector }}
+        - name: data
+          emptyDir: {sizeLimit: 1Gi}
+        {{- end }}
+      {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: {{ $name }}}
+{{- range $suffix := list "" "-preview" }}
+{{- if or (eq $suffix "") $bluegreen }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}{{ $suffix }}
+spec:
+  selector: {app: {{ $name }}}
+  ports:
+    - {name: health, port: {{ if $otel }}13133{{ else if $vector }}8686{{ else }}8080{{ end }}, targetPort: health}
+    {{- if $otel }}
+    - {name: grpc, port: 4317, targetPort: otlp-grpc}
+    - {name: http, port: 4318, targetPort: otlp-http}
+    {{- else if and $vector (not $writer) }}
+    - {name: http, port: 8080, targetPort: http}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-traces-peer
+spec:
+  clusterIP: None
+  selector: {app: otel-traces}
+  ports:
+    - {name: grpc, port: 4317, targetPort: otlp-grpc}
+{{- if .Values.rollouts.enabled }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: ready-before-promotion
+spec:
+  args:
+    - name: endpoint
+  metrics:
+    - name: readiness
+      count: 3
+      interval: 10s
+      failureLimit: 0
+      provider:
+        web:
+          url: '{{ "{{args.endpoint}}" }}'
+          timeoutSeconds: 5
+{{- end }}
