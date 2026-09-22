@@ -106,6 +106,8 @@ def main():
                 name,
                 "--label",
                 "observability.test=collectors",
+                "-e",
+                f"K8S_POD_UID={name}",
                 "--memory",
                 "512m",
                 "-v",
@@ -239,7 +241,7 @@ def main():
             "Arrow + trace-ID routing + production tail sampling",
             seconds=60,
         )
-        actual = metrics()
+        actual = [m for m in metrics() if not m["name"].startswith("platform.red.")]
         assert len(actual) == 2 and {m["name"] for m in actual} == {"safe_requests"}, actual
         identities = {
             next(
@@ -248,6 +250,11 @@ def main():
                 if a["key"] == "service.instance.id"
             )
             for r in exports(directory, "otel-metrics", "resourceMetrics")
+            if any(
+                m["name"] == "safe_requests"
+                for scope in r["scopeMetrics"]
+                for m in scope["metrics"]
+            )
         }
         assert identities == {"writer-a", "writer-b"}, identities
         for metric_export in actual:

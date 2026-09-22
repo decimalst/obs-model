@@ -1,0 +1,18 @@
+groups:
+- name: service-red
+  rules:
+  - record: service:red_requests:rate5m
+    expr: sum by (cloud_region, k8s_cluster_name, service_namespace, service_name, span_kind) (rate(platform_red_calls_total{otel_metric_overflow!="true"}[5m]))
+  - record: service:red_errors:rate5m
+    expr: sum by (cloud_region, k8s_cluster_name, service_namespace, service_name, span_kind) (rate(platform_red_calls_total{status_code="STATUS_CODE_ERROR",otel_metric_overflow!="true"}[5m])) or (0 * service:red_requests:rate5m)
+  - record: service:red_error_ratio:rate5m
+    expr: service:red_errors:rate5m / (service:red_requests:rate5m > 0)
+  - record: service:red_duration_seconds_bucket:rate5m
+    expr: sum by (cloud_region, k8s_cluster_name, service_namespace, service_name, span_kind, le) (rate(platform_red_duration_seconds_bucket{otel_metric_overflow!="true"}[5m]))
+  - alert: SpanMetricsCardinalityOverflow
+    expr: sum by (cloud_region, k8s_cluster_name) (increase(platform_red_calls_total{otel_metric_overflow="true"}[5m])) > 0
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Span metrics exceeded an aggregation cardinality limit

@@ -29,6 +29,7 @@ ALLOWED = {
     "collectors": {k: None for k in DEFAULTS["collectors"] if k != "replicas"},
     "autoscaling": {k: None for k in DEFAULTS["autoscaling"]},
     "writerAutoscaling": {k: None for k in DEFAULTS["writerAutoscaling"]},
+    "spanMetrics": {k: None for k in DEFAULTS["spanMetrics"]},
     "scaling": {k: None for k in DEFAULTS["scaling"]},
     "clickhouse": {"shards": None, "insertQuorumTimeoutMs": None, "pauseWrites": None},
     "resources": {
@@ -86,6 +87,11 @@ def validate_tuning(tuning):
             f"Invalid tuning {'.'.join(map(str, error.absolute_path))}: {error.message}"
         )
     c, q = full["collectors"], full["quota"]
+    red = full["spanMetrics"]
+    if sorted(red["histogramBucketsSeconds"]) != red["histogramBucketsSeconds"]:
+        raise ValueError("spanMetrics histogram buckets must be strictly increasing")
+    if red["expirationSeconds"] < 2 * red["flushIntervalSeconds"]:
+        raise ValueError("spanMetrics expiration must cover at least two flush intervals")
     scaling = full["scaling"]
     if (
         full["autoscaling"]["enabled"]

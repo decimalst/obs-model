@@ -64,6 +64,15 @@ collectors:
   traceBaselineAllocation: 25
   scrapeTimeout: 10s
   requireMetricIdentity: true
+spanMetrics:
+  enabled: true
+  spanKinds: [SERVER]
+  includeHttpRoute: false
+  aggregationCardinalityLimit: 64 # Per resource group, not a tenant-wide series quota.
+  resourceMetricsCacheSize: 128 # Per node agent; resource groups are service/namespace/writer.
+  flushIntervalSeconds: 15
+  expirationSeconds: 300
+  histogramBucketsSeconds: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
 autoscaling:
   enabled: true
   maxReplicas: 12
@@ -232,6 +241,8 @@ mimir:
         items:
         - key: platform.yaml
           path: platform/platform.yaml
+        - key: red.yaml
+          path: platform/red.yaml
     extraVolumeMounts:
     - name: git-rules
       mountPath: /etc/mimir/git-rules

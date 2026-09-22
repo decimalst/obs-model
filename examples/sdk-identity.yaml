@@ -7,14 +7,23 @@ spec:
   containers:
     - name: application
       env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef: {fieldPath: metadata.namespace}
         - name: POD_UID
           valueFrom:
             fieldRef: {fieldPath: metadata.uid}
         - name: OTEL_SERVICE_NAME
           value: checkout
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: service.instance.id=$(POD_UID),k8s.pod.uid=$(POD_UID)
+          value: service.instance.id=$(POD_UID),service.namespace=$(POD_NAMESPACE),k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.uid=$(POD_UID)
         - name: OTEL_EXPORTER_OTLP_PROTOCOL
           value: grpc
         - name: OTEL_EXPORTER_OTLP_ENDPOINT
           value: http://otel-agent.observability.svc.cluster.local:4317
+        # Full observed RED coverage requires spans to reach the agent before tail sampling.
+        - name: OTEL_TRACES_SAMPLER
+          value: always_on
+        # Logs remain on the Vector stdout/stderr path; avoid duplicate SDK log export.
+        - name: OTEL_LOGS_EXPORTER
+          value: none

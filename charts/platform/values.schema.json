@@ -667,6 +667,71 @@
           "maximum": 100
         }
       }
+    },
+    "spanMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "spanKinds",
+        "includeHttpRoute",
+        "aggregationCardinalityLimit",
+        "resourceMetricsCacheSize",
+        "flushIntervalSeconds",
+        "expirationSeconds",
+        "histogramBucketsSeconds"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "spanKinds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SERVER",
+              "CONSUMER"
+            ]
+          }
+        },
+        "includeHttpRoute": {
+          "type": "boolean"
+        },
+        "aggregationCardinalityLimit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "resourceMetricsCacheSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "flushIntervalSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 60
+        },
+        "expirationSeconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 3600
+        },
+        "histogramBucketsSeconds": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 300
+          }
+        }
+      }
     }
   },
   "definitions": {

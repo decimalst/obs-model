@@ -41,3 +41,14 @@
 {{- fail (printf "resources.%s requests must fit within limits" $role) -}}
 {{- end -}}
 {{- end -}}
+
+{{- $last := 0.0 -}}
+{{- range .Values.spanMetrics.histogramBucketsSeconds -}}
+{{- if le (float64 .) (float64 $last) -}}
+{{- fail "spanMetrics histogram buckets must be strictly increasing" -}}
+{{- end -}}
+{{- $last = . -}}
+{{- end -}}
+{{- if lt (int .Values.spanMetrics.expirationSeconds) (mul 2 (int .Values.spanMetrics.flushIntervalSeconds)) -}}
+{{- fail "spanMetrics expiration must cover at least two flush intervals" -}}
+{{- end -}}

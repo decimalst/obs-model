@@ -4,8 +4,10 @@ metadata:
   name: olly-dashboards
 data:
   {{- range $path, $_ := .Files.Glob "files/dashboards/*.json" }}
+  {{- if or (ne (base $path) "service-red.json") $.Values.spanMetrics.enabled }}
   {{ base $path }}: |
     {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
   {{- end }}
   saved-queries.json: |
     {{- $panels := list }}
@@ -22,3 +24,10 @@ metadata:
 data:
   platform.yaml: |
     {{- .Files.Get "files/rules/platform.yaml" | nindent 4 }}
+
+  red.yaml: |
+    {{- if .Values.spanMetrics.enabled }}
+    {{- .Files.Get "files/rules/red.yaml" | nindent 4 }}
+    {{- else }}
+    groups: []
+    {{- end }}

@@ -72,3 +72,13 @@ writerAutoscaling:
   scaleDownStabilizationSeconds: 300
   scaleUpPodsPerMinute: 3
   scaleDownPodsPerMinute: 1
+
+spanMetrics:
+  enabled: true
+  spanKinds: [SERVER]
+  includeHttpRoute: false # Use templated http.route only; never raw paths or span names.
+  aggregationCardinalityLimit: 64 # Per resource group, per node agent.
+  resourceMetricsCacheSize: 128
+  flushIntervalSeconds: 15
+  expirationSeconds: 300
+  histogramBucketsSeconds: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]

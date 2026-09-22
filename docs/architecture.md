@@ -53,3 +53,7 @@ The diagram was treated as reference data, not as deployment instructions. See `
 ## Reconciliation and interconnects
 
 [GitOps](gitops.md) makes this repository the desired state for pipeline configuration and Grafana/Mimir content. [The adversarial review](adversarial-review.md) records fixed flaws and explicit limits. [Scaling operations](scaling.md) distinguishes elastic tiers from quorum, partition and trace-state migrations. Compatible agent/scrape links use OTel Arrow by default; trace-aware routing and Tempo export retain OTLP.
+
+## Service RED metrics
+
+The agent's OTLP receiver fans out into the original trace path and a separate span-metrics branch before tail sampling. The branch selects server spans, normalizes only its copy, bounds aggregation, and gives generated metrics a distinct agent writer identity. It rejoins the Arrow metrics transport and existing Mimir policy. Direct application metrics retain their own writer identities. See [RED semantics and cardinality scope](service-red.md) and [remaining capabilities](platform-gaps.md).

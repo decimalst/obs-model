@@ -147,6 +147,8 @@ def main():
                 "none",
                 "-e",
                 "K8S_NODE_NAME=test",
+                "-e",
+                "K8S_POD_UID=runtime-agent",
                 "-v",
                 f"{credentials}:/var/run/secrets/kubernetes.io/serviceaccount:ro",
                 "-v",

@@ -1,0 +1,96 @@
+# Ignore the final floating-point mantissa bit in rate/quantile calculations.
+fuzzy_compare: true
+rule_files:
+- /rules/red.yaml
+evaluation_interval: 1m
+tests:
+- name: multiple writers aggregate request error and histogram rates
+  interval: 1m
+  input_series:
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="a",status_code="STATUS_CODE_UNSET"}
+    values: 0+108x20
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="a",status_code="STATUS_CODE_ERROR"}
+    values: 0+12x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="a",le="0.1"}
+    values: 0+60x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="a",le="0.5"}
+    values: 0+120x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="a",le="+Inf"}
+    values: 0+120x20
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="b",status_code="STATUS_CODE_UNSET"}
+    values: 0+54x20
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="b",status_code="STATUS_CODE_ERROR"}
+    values: 0+6x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="b",le="0.1"}
+    values: 0+30x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="b",le="0.5"}
+    values: 0+60x20
+  - series: platform_red_duration_seconds_bucket{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",instance="b",le="+Inf"}
+    values: 0+60x20
+  promql_expr_test:
+  - expr: service:red_requests:rate5m
+    eval_time: 15m
+    exp_samples:
+    - labels: '{__name__="service:red_requests:rate5m",cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER"}'
+      value: 3
+  - expr: service:red_errors:rate5m
+    eval_time: 15m
+    exp_samples:
+    - labels: '{__name__="service:red_errors:rate5m",cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER"}'
+      value: 0.3
+  - expr: service:red_error_ratio:rate5m
+    eval_time: 15m
+    exp_samples:
+    - labels: '{__name__="service:red_error_ratio:rate5m",cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER"}'
+      value: 0.1
+  - expr: histogram_quantile(0.95, service:red_duration_seconds_bucket:rate5m)
+    eval_time: 15m
+    exp_samples:
+    - labels: '{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER"}'
+      value: 0.46
+- name: healthy zero errors differ from no traffic
+  interval: 1m
+  input_series:
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",status_code="STATUS_CODE_UNSET"}
+    values: 0+60x20
+  promql_expr_test:
+  - expr: service:red_error_ratio:rate5m
+    eval_time: 15m
+    exp_samples:
+    - labels: '{__name__="service:red_error_ratio:rate5m",cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER"}'
+      value: 0
+- name: idle traffic has no error ratio
+  interval: 1m
+  input_series:
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",service_namespace="shop",service_name="checkout",span_kind="SPAN_KIND_SERVER",status_code="STATUS_CODE_UNSET"}
+    values: 0+0x20
+  promql_expr_test:
+  - expr: service:red_error_ratio:rate5m
+    eval_time: 15m
+    exp_samples: []
+- name: missing telemetry stays absent
+  interval: 1m
+  input_series: []
+  promql_expr_test:
+  - expr: service:red_requests:rate5m
+    eval_time: 15m
+    exp_samples: []
+- name: cardinality overflow alerts and does not become healthy service traffic
+  interval: 1m
+  input_series:
+  - series: platform_red_calls_total{cloud_region="us-east-1",k8s_cluster_name="east",otel_metric_overflow="true"}
+    values: 0+60x20
+  promql_expr_test:
+  - expr: service:red_requests:rate5m
+    eval_time: 15m
+    exp_samples: []
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: SpanMetricsCardinalityOverflow
+    exp_alerts:
+    - exp_labels:
+        cloud_region: us-east-1
+        k8s_cluster_name: east
+        severity: warning
+      exp_annotations:
+        summary: Span metrics exceeded an aggregation cardinality limit

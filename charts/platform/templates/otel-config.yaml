@@ -69,6 +69,36 @@ data:
       filter/cardinality:
         {{- include "olly.metricFilter" $ | nindent 8 }}
     {{- end }}
+    {{- if and (eq $role "agent") $.Values.spanMetrics.enabled }}
+      filter/red:
+        error_mode: propagate
+        traces:
+          span:
+            - '{{ range $i, $kind := $.Values.spanMetrics.spanKinds }}{{ if $i }} and {{ end }}kind != SPAN_KIND_{{ $kind }}{{ end }}'
+            - 'not IsString(resource.attributes["service.name"])'
+            - 'IsString(resource.attributes["service.name"]) and (Len(resource.attributes["service.name"]) == 0 or Len(resource.attributes["service.name"]) > 128)'
+      transform/red:
+        error_mode: propagate
+        trace_statements:
+          - context: span
+            statements:
+              # This is a separate receiver branch; original traces remain untouched.
+              - 'set(status.code, STATUS_CODE_ERROR) where IsInt(attributes["http.response.status_code"]) and attributes["http.response.status_code"] >= 500 and attributes["http.response.status_code"] < 600'
+              - 'set(status.code, STATUS_CODE_ERROR) where IsInt(attributes["http.status_code"]) and attributes["http.status_code"] >= 500 and attributes["http.status_code"] < 600'
+              - 'set(resource.attributes["service.namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["service.namespace"] == nil'
+              - 'set(resource.attributes["service.namespace"], "unknown") where not IsString(resource.attributes["service.namespace"])'
+              - 'set(resource.attributes["service.namespace"], "unknown") where Len(resource.attributes["service.namespace"]) > 128'
+              # A generated metric's writer is this agent, not the application replica.
+              - 'set(resource.attributes["service.instance.id"], "${env:K8S_POD_UID}")'
+              - 'keep_keys(resource.attributes, ["service.name", "service.namespace", "service.instance.id", "cloud.region", "k8s.cluster.name"])'
+              - 'keep_keys(attributes, [{{ if $.Values.spanMetrics.includeHttpRoute }}"http.route"{{ end }}])'
+              {{- if $.Values.spanMetrics.includeHttpRoute }}
+              - 'set(attributes["http.route"], "unknown") where not IsString(attributes["http.route"])'
+              - 'set(attributes["http.route"], "unknown") where Len(attributes["http.route"]) > 128'
+              {{- end }}
+              # Count observed spans; do not apply tracestate-based extrapolation.
+              - 'set(trace_state, "")'
+    {{- end }}
     {{- if eq $role "metrics" }}
       transform/identity:
         error_mode: propagate
@@ -114,6 +144,34 @@ data:
                   percent: {{ $.Values.collectors.traceSlowAllocation }}
                 - policy: baseline
                   percent: {{ $.Values.collectors.traceBaselineAllocation }}
+    {{- end }}
+    {{- if and (eq $role "agent") $.Values.spanMetrics.enabled }}
+    connectors:
+      spanmetrics/red:
+        namespace: platform.red
+        aggregation_temporality: AGGREGATION_TEMPORALITY_CUMULATIVE
+        aggregation_cardinality_limit: {{ $.Values.spanMetrics.aggregationCardinalityLimit }}
+        resource_metrics_cache_size: {{ $.Values.spanMetrics.resourceMetricsCacheSize }}
+        metrics_flush_interval: {{ $.Values.spanMetrics.flushIntervalSeconds }}s
+        metrics_expiration: {{ $.Values.spanMetrics.expirationSeconds }}s
+        add_resource_attributes: true
+        resource_metrics_key_attributes: [service.name, service.namespace, service.instance.id, cloud.region, k8s.cluster.name]
+        exclude_dimensions: [span.name]
+        dimensions:
+          - name: service.namespace
+          {{- if $.Values.spanMetrics.includeHttpRoute }}
+          - name: http.route
+            default: unknown
+          {{- end }}
+        histogram:
+          unit: s
+          explicit:
+            buckets:
+              {{- range $.Values.spanMetrics.histogramBucketsSeconds }}
+              - {{ printf "%vs" . | quote }}
+              {{- end }}
+        exemplars: {enabled: false}
+        events: {enabled: false}
     {{- end }}
     exporters:
     {{- if eq $role "agent" }}
@@ -167,6 +225,16 @@ data:
                     host: 0.0.0.0
                     port: 8888
       pipelines:
+    {{- if and (eq $role "agent") $.Values.spanMetrics.enabled }}
+        traces/red:
+          receivers: [otlp]
+          processors: [memory_limiter, resource, filter/red, transform/red]
+          exporters: [spanmetrics/red]
+        metrics/red:
+          receivers: [spanmetrics/red]
+          processors: [memory_limiter, filter/cardinality, batch]
+          exporters: [{{ include "olly.interconnect" $ }}/metrics]
+    {{- end }}
     {{- if or (eq $role "agent") (eq $role "metrics") }}
         metrics:
           receivers: [{{ $receiver }}{{ if eq $receiver "otelarrow" }}, otlp/http{{ end }}{{ if eq $role "agent" }}, kubeletstats{{ end }}]

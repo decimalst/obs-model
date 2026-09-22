@@ -58,8 +58,8 @@ collector-test:
 	$(PYTHON) scripts/collector_test.py
 .PHONY: rules-test
 rules-test:
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml /rules/red.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml /tests/red.test.yaml
 
 .PHONY: sharding-test
 sharding-test:
@@ -68,3 +68,11 @@ sharding-test:
 .PHONY: consumer-test
 consumer-test:
 	$(PYTHON) scripts/consumer_test.py
+
+.PHONY: red-test
+red-test:
+	$(PYTHON) scripts/red_test.py
+
+.PHONY: dashboard-test
+dashboard-test:
+	$(PYTHON) scripts/dashboard_test.py
