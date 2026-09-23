@@ -431,6 +431,51 @@ def preflight(p, reader=read):
             require(
                 required <= set(found["keys"]), f"Existing secret {name} is missing required keys"
             )
+    support = p.get("tuning", {}).get("support", {})
+    if support.get("canary", {}).get("enabled"):
+        namespace = kube("namespace", "observability")
+        require(
+            namespace["metadata"].get("labels", {}).get("observability/collect") == "true",
+            "Canary requires the namespace owner to opt observability into log collection",
+        )
+        found = reader(
+            [
+                "kubectl",
+                "-n",
+                "observability",
+                "get",
+                "secret",
+                support["canary"].get("secretName", "clickhouse-canary"),
+                "-o",
+                'go-template={"keys":{ {{range $k, $v := .data}}'
+                '{{printf "%q: true," $k}}{{end}}"_end":true}}',
+            ]
+        )
+        require(
+            "password" in found["keys"], "Canary needs its dedicated read-only ClickHouse Secret"
+        )
+    notifications = p.get("tuning", {}).get("notifications", {})
+    if notifications.get("enabled"):
+        found = reader(
+            [
+                "kubectl",
+                "-n",
+                "observability",
+                "get",
+                "secret",
+                notifications.get("secretName", "alert-receivers"),
+                "-o",
+                'go-template={"keys":{ {{range $k, $v := .data}}'
+                '{{printf "%q: true," $k}}{{end}}"_end":true}}',
+            ]
+        )
+        required = {
+            notifications.get("defaultReceiverKey", "default-url"),
+            *notifications.get("owners", {}).values(),
+        }
+        require(
+            required <= set(found["keys"]), "Alert receiver Secret is missing required URL keys"
+        )
     p["operator_namespaces"] = sorted(namespaces)
     print(
         "Verified cluster identity, AZs, node prerequisites, ownership, regional "

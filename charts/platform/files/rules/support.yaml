@@ -1,0 +1,43 @@
+groups:
+- name: platform-support
+  rules:
+  - alert: TelemetryCanaryFailed
+    expr: olly_support_check_success{signal=~"logs|metrics|traces"} == 0
+    for: 5m
+    labels: {severity: warning}
+    annotations:
+      summary: Synthetic telemetry is not queryable within its deadline
+      description: Check the signal path and sampling/drop budgets; this is not proof of total data loss.
+  - alert: AlertConfigurationSyncFailed
+    expr: olly_support_check_success{signal="alert_config"} == 0
+    for: 5m
+    labels: {severity: warning}
+    annotations:
+      summary: Git-managed alert routing cannot be reconciled
+      description: Check existing receiver Secrets and Mimir configuration API access. Do not dump receiver URLs.
+  - alert: SupportAgentMissing
+    expr: absent(olly_support_completed_timestamp_seconds)
+    for: 10m
+    labels: {severity: warning}
+    annotations:
+      summary: Support telemetry is missing
+      description: Verify support pods and scraping; independently monitor /health outside this Mimir instance.
+  - alert: SupportAgentStalled
+    expr: time() - olly_support_completed_timestamp_seconds > (3 * olly_support_interval_seconds)
+    for: 5m
+    labels: {severity: warning}
+    annotations:
+      summary: Support checks stopped completing
+  - alert: KafkaLogBacklogGrowing
+    expr: sum by (cloud_region, k8s_cluster_name) (kafka_consumergroup_lag{consumergroup="clickhouse-writer-v1",topic="logs"}) > 50000
+    for: 10m
+    labels: {severity: warning}
+    annotations:
+      summary: The log consumer group has a sustained backlog
+      description: Inspect KEDA, partition headroom and ClickHouse write availability before increasing consumers.
+  - alert: KafkaLogsUnderReplicated
+    expr: sum by (cloud_region, k8s_cluster_name) (kafka_topic_partition_under_replicated_partition{topic="logs"}) > 0
+    for: 5m
+    labels: {severity: critical}
+    annotations:
+      summary: Kafka log partitions have fewer in-sync replicas than expected

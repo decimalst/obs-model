@@ -12,6 +12,17 @@ DEFAULTS = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
 SCHEMA = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
 # Keep identity, topology, endpoint, image, and credential overrides out of tuning.
 ALLOWED = {
+    "support": {
+        "enabled": None,
+        "intervalSeconds": None,
+        "canary": {
+            "enabled": None,
+            "secretName": None,
+            "deadlineSeconds": None,
+            "pollSeconds": None,
+        },
+    },
+    "notifications": {k: None for k in DEFAULTS["notifications"]},
     "hubble": {"enabled": None, "sampleLimit": None},
     "profiling": {
         "sampleRate": None,
@@ -111,6 +122,23 @@ def validate_tuning(tuning):
         raise ValueError(
             f"Invalid tuning {'.'.join(map(str, error.absolute_path))}: {error.message}"
         )
+    if full["support"]["canary"]["deadlineSeconds"] >= full["support"]["intervalSeconds"]:
+        raise ValueError("Canary deadline must be shorter than its interval")
+    if full["notifications"]["enabled"] and not (
+        full["notifications"]["manageTenantConfig"] and full["support"]["enabled"]
+    ):
+        raise ValueError(
+            "Notifications require support and explicit tenant configuration ownership"
+        )
+    if full["support"]["canary"]["enabled"] and not full["support"]["enabled"]:
+        raise ValueError("Canary requires the support agent")
+    if (
+        full["support"]["canary"]["enabled"]
+        and full["support"]["canary"]["deadlineSeconds"]
+        <= full["collectors"]["traceDecisionWaitSeconds"]
+        + 2 * full["support"]["canary"]["pollSeconds"]
+    ):
+        raise ValueError("Canary deadline must allow the tail decision wait and query polling")
     c, q = full["collectors"], full["quota"]
     red = full["spanMetrics"]
     if sorted(red["histogramBucketsSeconds"]) != red["histogramBucketsSeconds"]:

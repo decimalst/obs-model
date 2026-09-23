@@ -286,6 +286,54 @@ class Installation(unittest.TestCase):
                 & set(command)
             )
 
+    def test_support_preflight_requires_owner_opt_in_and_secret_keys_only(self):
+        for missing in ["namespace", "canary", "receiver", None]:
+            with self.subTest(missing=missing):
+                p = configuration()
+                p["tuning"] = {
+                    "support": {"canary": {"enabled": True, "secretName": "custom-canary"}},
+                    "notifications": {
+                        "enabled": True,
+                        "manageTenantConfig": True,
+                        "owners": {"payments": "payments-url"},
+                    },
+                }
+                inventory, calls = Inventory(p), []
+
+                def reader(args, calls=calls, missing=missing, inventory=inventory):
+                    calls.append(args)
+                    if "get" in args:
+                        resource = args[args.index("get") + 1]
+                        if resource == "namespace":
+                            return {
+                                "metadata": {
+                                    "labels": {}
+                                    if missing == "namespace"
+                                    else {"observability/collect": "true"}
+                                }
+                            }
+                        if resource == "secret" and "custom-canary" in args:
+                            return {"keys": {} if missing == "canary" else {"password": True}}
+                        if resource == "secret" and "alert-receivers" in args:
+                            return {
+                                "keys": {"default-url": True}
+                                if missing == "receiver"
+                                else {"default-url": True, "payments-url": True}
+                            }
+                    return inventory(args)
+
+                if missing:
+                    with self.assertRaises(ValueError):
+                        preflight(p, reader)
+                else:
+                    preflight(p, reader)
+                for command in calls:
+                    self.assertFalse(
+                        {"apply", "patch", "create", "get-secret-value"} & set(command)
+                    )
+                    if "secret" in command:
+                        self.assertIn('printf "%q: true," $k', command[-1])
+
     def test_wrong_cluster_cross_region_bucket_and_role_fail_closed(self):
         for attr, value, expected in [
             ("endpoint", "https://wrong.eks.amazonaws.com", "different API"),

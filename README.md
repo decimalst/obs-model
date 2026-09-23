@@ -122,3 +122,9 @@ Register applications in the [Git-owned service catalog](docs/service-catalog.md
 [Network visibility and CPU profiling](docs/ebpf.md) are separate opt-ins: externally managed Cilium Hubble supplies network metrics/UI, while labeled Alloy eBPF collectors send CPU profiles to regional Pyroscope storage. Managed AWS installs can provision its bucket and Pod Identity role. Privileged kernel collection, CNI migrations, distributed profile ingestion and AZ/restore behavior still require live environment qualification.
 
 Run `make studio-test service-test profiling-test` for these additions, alongside the existing required checks.
+
+## Operational support
+
+The [support guide](docs/support.md) covers the stored-signal canary, Git-reconciled owner/default alert routes using existing Secrets, verified backend scrapes and capacity dashboards, private local support inventories, and catalog-owner debug requests. Canary generation and tenant alert ownership require explicit opt-in; no receiver credentials or environment approvals are invented. Run `make support-test` for native canary, notification and exporter checks.
+
+Upgrading to 0.6 restores safe scraped metrics that the previous combined cardinality rule dropped. Convert custom rules to one forbidden label per rule and review the restored metric volume. The guide includes migration and independent health-monitoring requirements.

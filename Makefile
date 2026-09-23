@@ -23,8 +23,8 @@ lint:
 	helm lint charts/platform --strict
 	helm lint charts/debug-grants --strict
 	helm lint charts/flink-operator --strict
-	$(PYTHON) -m ruff check scripts tests
-	$(PYTHON) -m ruff format --check scripts tests
+	$(PYTHON) -m ruff check scripts tests charts/platform/files/support
+	$(PYTHON) -m ruff format --check scripts tests charts/platform/files/support
 	@for script in scripts/*.sh; do bash -n "$$script"; done
 	cd services/log-quota && $(GO) vet ./...
 test: render
@@ -60,8 +60,8 @@ collector-test:
 	$(PYTHON) scripts/collector_test.py
 .PHONY: rules-test
 rules-test:
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml /rules/red.yaml /rules/catalog.yaml /tests/catalog.fixture.yaml
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml /tests/red.test.yaml /tests/catalog.test.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml /rules/red.yaml /rules/catalog.yaml /rules/support.yaml /tests/catalog.fixture.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml /tests/red.test.yaml /tests/catalog.test.yaml /tests/support.test.yaml
 
 .PHONY: sharding-test
 sharding-test:
@@ -99,3 +99,8 @@ studio-terraform-test: studio-test
 	cp terraform/live/us-east-1/.terraform.lock.hcl build/studio-new/.terraform.lock.hcl
 	terraform -chdir=build/studio-new init -backend=false -lockfile=readonly
 	terraform -chdir=build/studio-new validate
+
+.PHONY: support-test
+support-test:
+	$(PYTHON) scripts/support_test.py
+	$(PYTHON) scripts/kafka_metrics_test.py

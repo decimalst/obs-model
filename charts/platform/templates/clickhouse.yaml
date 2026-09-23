@@ -103,6 +103,12 @@ spec:
       podTemplate: data
       dataVolumeClaimTemplate: data
   configuration:
+    settings:
+      prometheus/endpoint: /metrics
+      prometheus/port: 9363
+      prometheus/metrics: true
+      prometheus/events: true
+      prometheus/asynchronous_metrics: true
     zookeeper:
       nodes:
         {{- range $i := until 3 }}
@@ -128,6 +134,16 @@ spec:
               replicasCount: {{ $.Values.clickhouse.replicas }}
             {{- end }}
     profiles:
+      {{- if .Values.support.canary.enabled }}
+      canary/readonly: 1
+      canary/skip_unavailable_shards: 0
+      canary/max_execution_time: 3
+      canary/max_rows_to_read: 100000
+      canary/max_bytes_to_read: 16777216
+      canary/max_memory_usage: 67108864
+      canary/max_result_rows: 1
+      canary/max_threads: 1
+      {{- end }}
       default/log_queries: 1
       default/max_memory_usage: 2000000000
       default/distributed_foreground_insert: 1
@@ -140,6 +156,15 @@ spec:
       readonly/skip_unavailable_shards: 0
       readonly/max_memory_usage: 2000000000
     users:
+      {{- if .Values.support.canary.enabled }}
+      canary/password:
+        valueFrom:
+          secretKeyRef:
+            name: {{ .Values.support.canary.secretName }}
+            key: password
+      canary/networks/ip: "{{ .Values.networkPolicy.vpcCIDR }}"
+      canary/profile: canary
+      {{- end }}
       default/networks/ip: "127.0.0.1"
       writer/password:
         valueFrom:
@@ -168,6 +193,8 @@ spec:
           containers:
             - name: clickhouse
               image: {{ .Values.images.clickhouse }}
+              ports:
+                - {name: metrics, containerPort: 9363}
               resources:
                 {{- toYaml .Values.resources.clickhouse | nindent 16 }}
     volumeClaimTemplates:

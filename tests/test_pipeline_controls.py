@@ -90,7 +90,8 @@ class PipelineControls(unittest.TestCase):
         conditions = gateway["processors"]["filter/cardinality"]["metric_conditions"]
         for rule in limits["metric_relabel_configs"]:
             self.assertEqual(rule["action"], "drop")
-            self.assertEqual(rule["separator"], "")
+            self.assertEqual(rule["separator"], ";")
+            self.assertEqual(len(rule["source_labels"]), 1)
             for label in rule["source_labels"]:
                 self.assertTrue(any(f'"{label}"' in condition for condition in conditions))
         exporter = gateway["exporters"]["prometheusremotewrite"]

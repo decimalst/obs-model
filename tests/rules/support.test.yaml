@@ -1,0 +1,93 @@
+rule_files:
+  - /rules/support.yaml
+evaluation_interval: 1m
+tests:
+  - name: failed-canary-and-owner-config
+    interval: 1m
+    input_series:
+      - series: olly_support_check_success{signal="logs",instance="probe-a"}
+        values: '0x12'
+      - series: olly_support_check_success{signal="alert_config",instance="probe-a"}
+        values: '0x12'
+      - series: olly_support_completed_timestamp_seconds{instance="probe-a"}
+        values: '0+60x12'
+      - series: olly_support_interval_seconds{instance="probe-a"}
+        values: '120x12'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: TelemetryCanaryFailed
+        exp_alerts:
+          - exp_labels: {signal: logs, instance: probe-a, severity: warning}
+            exp_annotations:
+              summary: Synthetic telemetry is not queryable within its deadline
+              description: Check the signal path and sampling/drop budgets; this is not proof of total data loss.
+      - eval_time: 6m
+        alertname: AlertConfigurationSyncFailed
+        exp_alerts:
+          - exp_labels: {signal: alert_config, instance: probe-a, severity: warning}
+            exp_annotations:
+              summary: Git-managed alert routing cannot be reconciled
+              description: Check existing receiver Secrets and Mimir configuration API access. Do not dump receiver URLs.
+      - eval_time: 6m
+        alertname: SupportAgentStalled
+        exp_alerts: []
+  - name: healthy-and-empty-backlog
+    interval: 1m
+    input_series:
+      - series: olly_support_check_success{signal="traces"}
+        values: '1x15'
+      - series: olly_support_completed_timestamp_seconds
+        values: '0+60x15'
+      - series: olly_support_interval_seconds
+        values: '120x15'
+      - series: kafka_consumergroup_lag{consumergroup="clickhouse-writer-v1",topic="logs"}
+        values: '0x15'
+      - series: kafka_topic_partition_under_replicated_partition{topic="logs"}
+        values: '0x15'
+    alert_rule_test:
+      - {eval_time: 12m, alertname: TelemetryCanaryFailed, exp_alerts: []}
+      - {eval_time: 12m, alertname: SupportAgentMissing, exp_alerts: []}
+      - {eval_time: 12m, alertname: SupportAgentStalled, exp_alerts: []}
+      - {eval_time: 12m, alertname: KafkaLogBacklogGrowing, exp_alerts: []}
+  - name: sustained-backlog-and-under-replication
+    interval: 1m
+    input_series:
+      - series: kafka_consumergroup_lag{consumergroup="clickhouse-writer-v1",topic="logs",cloud_region="us-east-1",k8s_cluster_name="test"}
+        values: '60000x15'
+      - series: kafka_topic_partition_under_replicated_partition{topic="logs",cloud_region="us-east-1",k8s_cluster_name="test"}
+        values: '1x15'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: KafkaLogBacklogGrowing
+        exp_alerts:
+          - exp_labels: {cloud_region: us-east-1, k8s_cluster_name: test, severity: warning}
+            exp_annotations:
+              summary: The log consumer group has a sustained backlog
+              description: Inspect KEDA, partition headroom and ClickHouse write availability before increasing consumers.
+      - eval_time: 12m
+        alertname: KafkaLogsUnderReplicated
+        exp_alerts:
+          - exp_labels: {cloud_region: us-east-1, k8s_cluster_name: test, severity: critical}
+            exp_annotations:
+              summary: Kafka log partitions have fewer in-sync replicas than expected
+      - eval_time: 12m
+        alertname: SupportAgentMissing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Support telemetry is missing
+              description: Verify support pods and scraping; independently monitor /health outside this Mimir instance.
+  - name: stalled-worker
+    interval: 1m
+    input_series:
+      - series: olly_support_completed_timestamp_seconds{instance="probe-a"}
+        values: '0x20'
+      - series: olly_support_interval_seconds{instance="probe-a"}
+        values: '120x20'
+    alert_rule_test:
+      - eval_time: 13m
+        alertname: SupportAgentStalled
+        exp_alerts:
+          - exp_labels: {instance: probe-a, severity: warning}
+            exp_annotations:
+              summary: Support checks stopped completing

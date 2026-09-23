@@ -49,6 +49,17 @@ Kafka consumers now scale from committed-offset lag through KEDA, with 36 partit
 | Static Pages publication could disclose private catalogs or carry a privileged GitHub token | Build a fixed static file allowlist, keep imports local, and require a separate reviewed CLI publication step | Authentication, team authorization and multi-user approval workflows are separate platform work |
 | A displayed SLO could imply alert delivery is configured | Generate behavior-tested burn-rate rules only for opted-in services and distinguish direct application metrics from observed spans | Owners must configure/test alert routes and instrument the declared metric contract |
 
+## Operational support review (0.6)
+
+| Finding | Change / evidence | Remaining boundary |
+|---|---|---|
+| Healthy scrape targets can conceal wholesale metric loss | Replace the empty-separator combined drop rule with one forbidden label per rule; native scraping through Arrow and remote write proves safe samples survive and identifier samples are rejected | Restored samples increase ingestion volume; migrate custom grouped rules and review capacity |
+| A canary could accept stale data or partial ingestion | Require exact fresh log markers, metric values and trace IDs; fail rejected OTLP signals and stale worker health | Sampling budgets can legitimately drop synthetic traces; an independent monitor must poll each pod during a Mimir outage |
+| Query-level scan limits conflict with a production read-only profile | Give the canary a separate existing Secret and a dedicated read-only profile with server-enforced limits; the pinned database rejects writes and limit overrides in tests | The account is still a regional log reader, and internal transport needs TLS/authentication hardening |
+| A routing reconciler could take over an existing tenant or disclose receiver credentials | Require explicit tenant ownership; mount existing Secrets, reject redirects and keep rendered configuration out of logs/bundles; actual Mimir delivers owner/default alerts locally | Review the full-tenant handover and real receiver acceptance; disabling reconciliation does not remove stored routes |
+| A support archive could copy secrets through pod specs or error messages | Project approved status fields and omit annotations, logs, specs and error bodies; test forbidden-field exclusion | Resource names and topology remain internal information requiring review before sharing |
+| A debug form could impersonate another owner or target | Default-deny exact actor/region/cluster/namespace bindings, catalog ownership, workload-label verification and scoped pod reconciliation | The protected workflow supplies identity; CLI arguments are not authentication, and IAM/RBAC plus durable audit retention remain operator responsibilities |
+
 ## Pinned implementation references
 
 - [Arrow receiver configuration, v0.148.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/receiver/otelarrowreceiver/config.go) and [Arrow exporter queue/protocol behavior](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/exporter/otelarrowexporter/README.md).

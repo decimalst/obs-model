@@ -25,6 +25,12 @@ data:
   platform.yaml: |
     {{- .Files.Get "files/rules/platform.yaml" | nindent 4 }}
 
+  support.yaml: |
+    {{- if .Values.support.enabled }}
+    {{- .Files.Get "files/rules/support.yaml" | nindent 4 }}
+    {{- else }}
+    groups: []
+    {{- end }}
   catalog.yaml: |
     {{- .Files.Get "files/rules/catalog.yaml" | nindent 4 }}
   red.yaml: |

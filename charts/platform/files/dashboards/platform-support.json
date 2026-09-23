@@ -1,0 +1,389 @@
+{
+  "uid": "platform-support",
+  "title": "Platform support and capacity",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "30s",
+  "description": "Unknown/missing data is not healthy. Canary and alert routing are explicit opt-ins. Physical insert and replication counts are not unique events. Monitor the support /health endpoint independently of this Mimir instance.",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "region",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "query": "label_values(up, cloud_region)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1
+      },
+      {
+        "name": "cluster",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "mimir"
+        },
+        "query": "label_values(up{cloud_region=~\"$region\"}, k8s_cluster_name)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Stored-signal checks (1 pass, 0 fail)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "olly_support_check_success{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Seconds since last successful signal check",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - olly_support_last_success_timestamp_seconds{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Backend scrape health (missing means unknown)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\",job=~\"mimir|tempo|clickhouse|kafka-exporter\"}",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Log consumer backlog (events)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kafka_consumergroup_lag{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\",consumergroup=\"clickhouse-writer-v1\",topic=\"logs\"})",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Log partitions with reduced replication",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(kafka_topic_partition_under_replicated_partition{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\",topic=\"logs\"})",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Busiest collector retry queue (%)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * max by (exporter) (otelcol_exporter_queue_size{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"} / clamp_min(otelcol_exporter_queue_capacity{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}, 1))",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "ClickHouse physical inserts / second (all tables)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(ClickHouseProfileEvents_InsertedRows_total{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "ClickHouse delayed inserts / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(ClickHouseProfileEvents_DelayedInserts_total{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "ClickHouse readonly replicated tables",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(ClickHouseMetrics_ReadonlyReplica{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"})",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "ClickHouse replication queue operations (all replicas)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(ClickHouseAsyncMetrics_ReplicasSumQueueSize{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"})",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Tempo accepted spans / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(tempo_distributor_spans_received_total{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Alertmanager notification attempts / second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "mimir"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(cortex_alertmanager_notifications_total{cloud_region=~\"$region\",k8s_cluster_name=~\"$cluster\"}[5m]))",
+          "legendFormat": "{{signal}} {{exporter}} {{instance}}"
+        }
+      ]
+    }
+  ]
+}

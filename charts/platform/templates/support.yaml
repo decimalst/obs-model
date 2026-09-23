@@ -1,0 +1,83 @@
+{{- if .Values.support.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: olly-support
+data:
+  agent.py: |
+    {{- .Files.Get "files/support/agent.py" | nindent 4 }}
+  notifications.json: |
+    {{- .Values.notifications | toJson | nindent 4 }}
+  settings.json: |
+    {{- dict "namespace" .Release.Namespace "cluster" .Values.clusterName "otlp" "http://otel-agent:4318" "mimir" "http://mimir-gateway" "tempo" "http://tempo-query-frontend:3200" "clickhouse" "http://clickhouse-observability:8123" "clickhousePasswordFile" "/clickhouse/password" "alertmanager" "http://mimir-alertmanager-headless:8080" "notificationFile" "/config/notifications.json" "notificationsEnabled" .Values.notifications.enabled "intervalSeconds" .Values.support.intervalSeconds "canary" .Values.support.canary | toJson | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: olly-support
+spec:
+  replicas: 2
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector:
+    matchLabels: {app: olly-support}
+  template:
+    metadata:
+      labels: {app: olly-support, observability/service: olly-canary}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        checksum/config: {{ printf "%s%s%s%s" (.Files.Get "files/support/agent.py") (.Values.support | toJson) (.Values.notifications | toJson) (.Values.clusterName) | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- include "olly.security" . | nindent 8 }}
+      {{- include "olly.spread" "olly-support" | nindent 6 }}
+      containers:
+        - name: support
+          image: {{ .Values.support.image }}
+          command: [python, -B, /config/agent.py]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 25m, memory: 64Mi}, limits: {cpu: 250m, memory: 128Mi}}
+          env:
+            - name: POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+          ports: [{name: http, containerPort: 8000}]
+          readinessProbe: {httpGet: {path: /ready, port: http}}
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            {{- if .Values.support.canary.enabled }}
+            - {name: clickhouse, mountPath: /clickhouse, readOnly: true}
+            {{- end }}
+            {{- if .Values.notifications.enabled }}
+            - {name: receivers, mountPath: /receivers, readOnly: true}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap: {name: olly-support}
+        {{- if .Values.support.canary.enabled }}
+        - name: clickhouse
+          secret: {secretName: {{ .Values.support.canary.secretName }}, items: [{key: password, path: password}]}
+        {{- end }}
+        {{- if .Values.notifications.enabled }}
+        - name: receivers
+          secret: {secretName: {{ .Values.notifications.secretName }}}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: olly-support
+spec:
+  selector: {app: olly-support}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: olly-support
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {app: olly-support}
+{{- end }}

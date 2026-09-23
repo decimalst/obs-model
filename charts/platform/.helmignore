@@ -1,0 +1,3 @@
+files/support/__pycache__/
+*.pyc
+.DS_Store

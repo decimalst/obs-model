@@ -1,6 +1,6 @@
 # Validation record
 
-Local validation performed on 2026-09-21–22, on macOS arm64 with Linux containers in Docker. This record distinguishes executed checks from deployment configuration and future acceptance work.
+Local validation performed on 2026-09-21–23, on macOS arm64 with Linux containers in Docker. This record distinguishes executed checks from deployment configuration and future acceptance work.
 
 ## Executed checks
 
@@ -73,3 +73,29 @@ Executed local checks:
 The final studio-only change preserving optional imported database/cluster settings reran its compiler, export, catalog and generated-Terraform checks. Kafka/ClickHouse sharding and consumer behavior were not changed or rerun in this pass; their earlier executed evidence remains above.
 
 No cloud apply, CNI change, application publication or GitHub Pages deployment was performed. A GitHub remote is not configured in this checkout. Profile parser/API startup validation is not eBPF capture, Pod Identity, retention deletion, Raft failover or distributed-storage qualification; the live gates in `ebpf.md` remain required. No live profile datasource query, mobile browser acceptance, application image deployment or hosted Pages download is claimed.
+
+## 2026-09-23: operational support (0.6)
+
+Added opt-in exact stored-signal canaries, Git-reconciled owner/default alert routing, native backend scrapes and a support dashboard, read-only local support inventories, and protected owner-scoped debug requests. Native scraping uncovered a real empty-separator regression: healthy `up` metrics concealed dropped safe samples. The shared cardinality policy now uses one source label per drop rule; custom grouped policies require migration.
+
+Executed local checks:
+
+| Check | Result |
+|---|---|
+| `make check` | Pass: 82 Python tests, 6 Node tests, Go race tests/vet, strict Helm lint, formatting and shell syntax |
+| Default native Kubernetes schemas | Pass: 390 rendered resources; 332 valid, 0 invalid, 0 errors, 58 skipped; packaged custom-resource checks run separately in runtime validation |
+| `make terraform-test` | Pass: 19 mocked tests and all module/root validations; no real plan/apply |
+| `make runtime-test` | Pass: Vector transforms/configuration, all collector configurations, Mimir targets, Tempo and quota behavior against live Valkey |
+| `make support-test`: canary | Pass: exact log, metric marker and trace found through real local Vector, Arrow collectors, ClickHouse, Prometheus and Tempo; stale/wrong identities and partial OTLP ingestion have unit rejection tests |
+| `make support-test`: canary account/runtime | Pass: the rendered read-only ClickHouse profile permits bounded reads, rejects writes and scan-limit overrides; pinned non-root/read-only support container starts without credentials when checks are disabled, returns ready and reports health as degraded |
+| `make support-test`: alerts | Pass: Mimir 3.2.0 accepts generated tenant configuration and delivers owner/default fixture notifications to a disposable local receiver |
+| `make support-test`: scrapes/dashboard queries | Pass: actual backend samples survive production scrape filters, Arrow and remote write; identifier-bearing samples including a semicolon-only value are rejected; support queries execute against stored metrics |
+| `make support-test`: Kafka exporter | Pass: the pinned Strimzi exporter reports 13 queued records across 3 partitions and healthy replication against a real disposable broker |
+| `make dashboard-test` | Pass: Grafana 12.3.1 loads the RED, catalog and support dashboards, prevents Viewer edits and reloads a changed provisioned file without restart; browser rendering remains separate |
+| `make collector-test red-test rules-test` | Pass: Arrow/cardinality/48-trace affinity regression, pre-tail RED behavior, 22 rule definitions including the catalog fixture, and all four rule-test files |
+| `make profiling-test` | Pass: native Alloy/Pyroscope configuration and Hubble scrape checks; optional manifests total 267 resources, 254 valid, 13 skipped, 0 invalid/errors |
+| Workflow and chart packaging | Pass: actionlint and versioned chart packaging; Python bytecode is excluded from the Helm archive |
+
+The support test uses a direct Vector-to-ClickHouse sink with synthetic Kubernetes metadata, single-node ClickHouse and Tempo, and Prometheus as the Mimir metrics-store substitute. It bypasses trace routing/tail sampling, which the separate collector suite exercises. Kafka exporter values are tested against a separate single-broker fixture; this does not prove Strimzi deployment or partition failover. Existing sharding/consumer behavior was not changed or rerun in this increment; earlier executed evidence remains above.
+
+The native alert fixture uses HTTP only for its disposable local receiver; production receiver configuration requires HTTPS. It tests configuration acceptance and notification routing, not real credential delivery, receiver-side processing, resolution or paging. No external notifications, AWS changes, GitHub publication or hosted workflow runs occurred. Live EKS/operator reconciliation, end-to-end deployed canaries, independent health monitoring, external alert acceptance and recovery/HA rehearsals remain required. See [support.md](support.md) for enablement and migration steps and [platform-gaps.md](platform-gaps.md) for remaining work.

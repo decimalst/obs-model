@@ -58,6 +58,12 @@ spec:
     template:
       podDisruptionBudget:
         maxUnavailable: 1
+  kafkaExporter:
+    image: {{ .Values.images.kafkaExporter }}
+    groupRegex: '^clickhouse-writer-v1$'
+    topicRegex: '^logs$'
+    showAllOffsets: true
+    resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {cpu: 250m, memory: 128Mi}}
   entityOperator:
     topicOperator: {}
 {{- range $topic := list "logs" "mimir-ingest" }}

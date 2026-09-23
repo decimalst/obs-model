@@ -3,6 +3,7 @@ clusterName: olly-us-east-1
 storageClass: gp3-encrypted
 createStorageClass: true
 images:
+  kafkaExporter: quay.io/strimzi/kafka:1.2.0-kafka-4.3.1@sha256:fef34b5438e8556cc08c01f3e254e47346f061b53a4e38d4289853777e0ea7f1
   vector: timberio/vector:0.54.0-debian
   otel: otel/opentelemetry-collector-contrib:0.148.0
   quota: observability/log-quota:0.1.0
@@ -155,27 +156,78 @@ mimir:
         out_of_order_time_window: 2m
         max_query_lookback: 15d
         metric_relabel_configs:
+        # One source per rule avoids empty-separator defaulting in Prometheus receiver.
         - action: drop
-          source_labels:
-          - user_id
-          - user_email
-          - enduser_id
-          - request_id
-          - session_id
-          - trace_id
-          - span_id
-          - http_url
-          - http_target
-          - url_full
-          - url_path
-          - url_query
-          - db_statement
-          - db_query_text
-          - exception_message
-          - exception_stacktrace
-          - container_id
-          - pod_template_hash
-          separator: ''
+          source_labels: [user_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [user_email]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [enduser_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [request_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [session_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [trace_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [span_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [http_url]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [http_target]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [url_full]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [url_path]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [url_query]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [db_statement]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [db_query_text]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [exception_message]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [exception_stacktrace]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [container_id]
+          separator: ';'
+          regex: .+
+        - action: drop
+          source_labels: [pod_template_hash]
+          separator: ';'
           regex: .+
       ruler:
         enable_api: false
@@ -243,6 +295,8 @@ mimir:
           path: platform/platform.yaml
         - key: catalog.yaml
           path: platform/catalog.yaml
+        - key: support.yaml
+          path: platform/support.yaml
         - key: red.yaml
           path: platform/red.yaml
     extraVolumeMounts:
@@ -709,3 +763,19 @@ pyroscope:
             matchLabels:
               app.kubernetes.io/name: pyroscope
               app.kubernetes.io/component: admin
+
+support:
+  enabled: true
+  image: python:3.14.7-slim@sha256:caaf356f40667c496d405780745b9ac25771c189a51dfcc42430d531ea09f8a2
+  intervalSeconds: 120
+  canary:
+    enabled: false # Enable after the platform namespace opts into log collection.
+    secretName: clickhouse-canary
+    deadlineSeconds: 90
+    pollSeconds: 5
+notifications:
+  enabled: false
+  manageTenantConfig: false # Explicit ownership of Mimir tenant platform alert routing.
+  secretName: alert-receivers
+  defaultReceiverKey: default-url
+  owners: {}

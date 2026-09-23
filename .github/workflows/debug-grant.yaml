@@ -6,6 +6,12 @@ on:
         type: choice
         options: [us-east-1, us-west-2]
         required: true
+      cluster:
+        type: string
+        required: true
+      service:
+        type: string
+        required: true
       namespace:
         type: string
         required: true
@@ -24,28 +30,39 @@ permissions:
   contents: read
   id-token: write
 concurrency:
-  group: debug-${{ inputs.region }}-${{ inputs.namespace }}-${{ inputs.workload }}
+  group: debug-${{ inputs.region }}-${{ inputs.cluster }}-${{ inputs.namespace }}-${{ inputs.workload }}
   cancel-in-progress: false
 jobs:
   grant:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     environment: observability-operations
     # This runner must reach the private regional EKS endpoint.
     runs-on: [self-hosted, observability-private]
     timeout-minutes: 5
+    env:
+      ACTOR: ${{ github.actor }}
+      REGION: ${{ inputs.region }}
+      CLUSTER: ${{ inputs.cluster }}
+      TARGET_NAMESPACE: ${{ inputs.namespace }}
+      SERVICE: ${{ inputs.service }}
+      WORKLOAD: ${{ inputs.workload }}
+      HOURS: ${{ inputs.hours }}
+      GRANT_ACTION: ${{ inputs.action }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Authorize catalog owner before obtaining cloud credentials
+        run: |
+          python3 scripts/debug_request.py --actor "$ACTOR" --region "$REGION" --cluster "$CLUSTER" \
+            --namespace "$TARGET_NAMESPACE" --service "$SERVICE" --workload "$WORKLOAD" \
+            --action "$GRANT_ACTION" --hours "$HOURS" --check-policy-only
       - uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5
         with:
           role-to-assume: ${{ vars.OBSERVABILITY_OPERATIONS_ROLE }}
           aws-region: ${{ inputs.region }}
       - name: Apply bounded debug grant
-        env:
-          REGION: ${{ inputs.region }}
-          TARGET_NAMESPACE: ${{ inputs.namespace }}
-          WORKLOAD: ${{ inputs.workload }}
-          HOURS: ${{ inputs.hours }}
-          GRANT_ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
-          aws eks update-kubeconfig --region "$REGION" --name "olly-$REGION"
-          python3 scripts/debug_grants.py "$GRANT_ACTION" --namespace "$TARGET_NAMESPACE" --name "$WORKLOAD" --hours "$HOURS"
+          aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER"
+          python3 scripts/debug_request.py --actor "$ACTOR" --region "$REGION" --cluster "$CLUSTER" \
+            --namespace "$TARGET_NAMESPACE" --service "$SERVICE" --workload "$WORKLOAD" \
+            --action "$GRANT_ACTION" --hours "$HOURS"

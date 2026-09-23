@@ -75,3 +75,9 @@ Enable profiles with a separately reviewed Terraform plan (`enable_profiling=tru
 Before disabling profiles, remove workload opt-in labels, drain exporters, preserve backend query access for the retention period and rehearse metastore/object-store restore. Do not flip Terraform storage off as a cleanup shortcut: buckets deliberately reject deletion while nonempty and PVCs remain retained. Do not change Pyroscope storage architecture, metastore membership or role ownership through a casual Helm rollback. Plan upgrades and any removal as a separate stateful migration.
 
 Publish the configuration studio only with the allowlisted Pages artifact and reviewed workflow environment. No catalog/environment data belongs in the public bundle. The [studio runbook](configuration-studio.md) covers offline generation, GitHub setup and the explicit publication step.
+
+## Support rollout (0.6)
+
+Follow [support.md](support.md) for namespace collection opt-in, a dedicated existing canary Secret and read-only database profile, bounded canary enablement, existing receiver Secrets and explicit Alertmanager tenant ownership. Preserve any previous tenant configuration securely before handover; disabling the reconciler does not delete stored routes. Observe the restored safe metric volume after the cardinality correction. ClickHouse's new metrics listener and optional user/profile require a rolling operator update with quorum preserved, not a schema or shard migration. Qualify owner/default notification routing and resolution against real receivers separately from local tests.
+
+The debug workflow now requires the actual cluster and catalog service and defaults to denying actors until `operations/debug-access.json` is reviewed. Scope IAM/RBAC and protect the workflow/default branch before enabling requests. Collect support inventories locally and review them before sharing. Recovery, AZ-loss and upgrade rehearsal gates remain required.

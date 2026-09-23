@@ -99,8 +99,29 @@ spec:
                   target_label: __address__
                 - source_labels: [__meta_kubernetes_namespace]
                   target_label: namespace
+                - source_labels: [__meta_kubernetes_pod_label_app]
+                  target_label: olly_component
               metric_relabel_configs:
                 {{- toYaml .Values.mimir.mimir.structuredConfig.limits.metric_relabel_configs | nindent 16 }}
+            {{- range $job := list (dict "name" "mimir" "label" "__meta_kubernetes_pod_label_app_kubernetes_io_name" "match" "mimir" "port" "8080" "metrics" "(cortex_.*|alertmanager_.*|process_.*)") (dict "name" "tempo" "label" "__meta_kubernetes_pod_label_app_kubernetes_io_name" "match" "tempo" "port" "3200" "metrics" "(tempo_.*|process_.*)") (dict "name" "clickhouse" "label" "__meta_kubernetes_pod_label_clickhouse_altinity_com_chi" "match" "observability" "port" "9363" "metrics" "ClickHouse.*") (dict "name" "kafka-exporter" "label" "__meta_kubernetes_pod_label_strimzi_io_kind" "match" "KafkaExporter" "port" "9404" "metrics" "kafka_.*") }}
+            - job_name: {{ $job.name }}
+              scrape_interval: {{ $.Values.collectors.scrapeInterval }}
+              scrape_timeout: {{ $.Values.collectors.scrapeTimeout }}
+              sample_limit: {{ $.Values.collectors.scrapeSampleLimit }}
+              label_limit: {{ $.Values.mimir.mimir.structuredConfig.limits.max_label_names_per_series }}
+              label_value_length_limit: {{ $.Values.mimir.mimir.structuredConfig.limits.max_label_value_length }}
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces: {names: [{{ $.Release.Namespace }}]}
+              relabel_configs:
+                - {source_labels: [{{ $job.label }}], regex: {{ $job.match | quote }}, action: keep}
+                - {source_labels: [__meta_kubernetes_pod_container_port_number], regex: {{ $job.port | quote }}, action: keep}
+                - {source_labels: [__meta_kubernetes_pod_phase], regex: Running, action: keep}
+                - {source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component], target_label: component}
+              metric_relabel_configs:
+                - {source_labels: [__name__], regex: {{ $job.metrics | quote }}, action: keep}
+                {{- toYaml $.Values.mimir.mimir.structuredConfig.limits.metric_relabel_configs | nindent 16 }}
+            {{- end }}
             {{- if .Values.hubble.enabled }}
             - job_name: hubble
               scrape_interval: {{ .Values.collectors.scrapeInterval }}

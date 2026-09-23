@@ -113,6 +113,14 @@ def main():
                 documents["ConfigMap", "olly-dashboards"]["data"]["service-catalog.json"]
             )["panels"]
         )
+        support = json.loads(request(address, "/api/dashboards/uid/platform-support"))
+        assert support["meta"]["provisioned"] and not support["meta"]["canSave"]
+        assert (
+            support["dashboard"]["panels"]
+            == json.loads(
+                documents["ConfigMap", "olly-dashboards"]["data"]["platform-support.json"]
+            )["panels"]
+        )
         actual = dashboard()
         assert actual["meta"]["provisioned"]
         assert not actual["meta"]["canSave"]
@@ -124,7 +132,7 @@ def main():
         (dashboard_dir / "service-red.json").write_text(json.dumps(changed))
         wait(lambda: dashboard()["dashboard"]["title"] == changed["title"], "dashboard reload", 45)
         print(
-            f"PASS: {image} loads the provisioned RED and catalog dashboards and variables, "
+            f"PASS: {image} loads the RED, catalog and support dashboards and variables, "
             "keeps Viewer edits disabled, and reloads a file update without restart. "
             "Browser rendering and datasource queries are separate acceptance checks."
         )

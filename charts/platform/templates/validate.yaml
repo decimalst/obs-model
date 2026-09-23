@@ -52,3 +52,17 @@
 {{- if lt (int .Values.spanMetrics.expirationSeconds) (mul 2 (int .Values.spanMetrics.flushIntervalSeconds)) -}}
 {{- fail "spanMetrics expiration must cover at least two flush intervals" -}}
 {{- end -}}
+
+{{- if ge (int .Values.support.canary.deadlineSeconds) (int .Values.support.intervalSeconds) }}
+{{- fail "Canary deadline must be shorter than its interval" }}
+{{- end }}
+{{- if and .Values.notifications.enabled (not (and .Values.notifications.manageTenantConfig .Values.support.enabled)) }}
+{{- fail "Notifications require support and explicit tenant configuration ownership" }}
+{{- end }}
+
+{{- if and .Values.support.canary.enabled (not .Values.support.enabled) }}
+{{- fail "Canary requires the support agent" }}
+{{- end }}
+{{- if and .Values.support.canary.enabled (le (int .Values.support.canary.deadlineSeconds) (add (int .Values.collectors.traceDecisionWaitSeconds) (mul 2 (int .Values.support.canary.pollSeconds)))) }}
+{{- fail "Canary deadline must allow the tail decision wait and query polling" }}
+{{- end }}
