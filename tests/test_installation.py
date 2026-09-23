@@ -474,6 +474,29 @@ class Installation(unittest.TestCase):
             config.write_text(json.dumps({"platform": {"value": p}}))
             self.assertEqual(load_platform(config), validate_platform(copy.deepcopy(p)))
 
+    @patch("scripts.install.subprocess.run")
+    @patch("scripts.install.preflight")
+    def test_offline_render_does_not_contact_cluster_or_aws(self, check, run):
+        with tempfile.TemporaryDirectory() as temp:
+            with patch(
+                "sys.argv",
+                [
+                    "install",
+                    "--config",
+                    str(ROOT / "examples/existing-platform.yaml"),
+                    "--quota-image",
+                    DIGEST,
+                    "--render-only",
+                    "--output-dir",
+                    temp,
+                ],
+            ):
+                install()
+            check.assert_not_called()
+            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_args.args[0][:2], ["helm", "template"])
+            self.assertTrue((Path(temp) / "platform.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

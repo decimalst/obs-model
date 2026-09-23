@@ -142,6 +142,7 @@ def main():
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--quota-image", required=True)
     parser.add_argument("--tuning", type=Path)
+    parser.add_argument("--security-profile", type=Path)
     parser.add_argument(
         "--output", type=Path, required=True, help="Repository-relative gitops/clusters/REGION path"
     )
@@ -154,6 +155,13 @@ def main():
             "output exists; edit its reviewed release values instead of overwriting Git state"
         )
     platform = load_platform(args.config)
+    if args.security_profile:
+        try:
+            from .security_config import load_profile
+        except ImportError:
+            from security_config import load_profile
+
+        platform["security_profile"] = load_profile(args.security_profile)
     if args.tuning:
         platform["tuning"] = merge(platform.get("tuning", {}), load_tuning(args.tuning))
     write_bundle(

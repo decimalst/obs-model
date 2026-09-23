@@ -1,0 +1,6 @@
+version: 1
+mode: shared
+cells:
+  - id: regional-shared
+    platform: existing-platform.yaml
+    services: [applications/checkout, applications/catalog]

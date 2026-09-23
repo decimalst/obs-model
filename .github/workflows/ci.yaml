@@ -45,5 +45,5 @@ jobs:
         run: .venv/bin/python scripts/check_shard_changes.py --base-ref "$BASE_SHA"
       - run: make terraform-init terraform-test studio-terraform-test
       - run: make runtime-test GO=go
-      - run: make image integration-test collector-test rules-test sharding-test consumer-test red-test dashboard-test profiling-test support-test
+      - run: make image integration-test collector-test rules-test sharding-test consumer-test red-test dashboard-test profiling-test support-test privacy-graph-test security-test
       - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 -shellcheck=

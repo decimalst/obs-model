@@ -1,0 +1,22 @@
+version: 1
+serverSecretName: grafana-server
+access:
+  mode: external-proxy
+  url: https://grafana.example.com
+  proxyNamespace: ingress-system
+authentication:
+  mode: oauth
+  secretName: grafana-oauth
+  authURL: https://identity.example.com/authorize
+  tokenURL: https://identity.example.com/oauth/token
+  userInfoURL: https://identity.example.com/userinfo
+  scopes: [openid, profile, email]
+  groupsClaim: roles
+  roles:
+    Viewer: [observability-viewers]
+    Admin: [observability-admins]
+internalTransport:
+  mode: existing-mesh
+  provider: linkerd
+  grafanaClientIdentities:
+    - shared-ingress.ingress-system.serviceaccount.identity.linkerd.cluster.local

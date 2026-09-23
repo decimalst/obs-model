@@ -12,6 +12,10 @@ DEFAULTS = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
 SCHEMA = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
 # Keep identity, topology, endpoint, image, and credential overrides out of tuning.
 ALLOWED = {
+    "privacy": {
+        kind: {key: None for key in fields} for kind, fields in DEFAULTS["privacy"].items()
+    },
+    "serviceGraph": {key: None for key in DEFAULTS["serviceGraph"]},
     "support": {
         "enabled": None,
         "intervalSeconds": None,
@@ -122,6 +126,19 @@ def validate_tuning(tuning):
         raise ValueError(
             f"Invalid tuning {'.'.join(map(str, error.absolute_path))}: {error.message}"
         )
+    graph = full["serviceGraph"]
+    if graph["enabled"] and not graph["services"]:
+        raise ValueError("Service graph requires an explicit service allowlist")
+    if sorted(graph["histogramBucketsSeconds"]) != graph["histogramBucketsSeconds"]:
+        raise ValueError("Service graph histogram buckets must be strictly increasing")
+    privacy = full["privacy"]["traces"]
+    if privacy["mode"] == "allowlist" and not {
+        "service.name",
+        "service.namespace",
+        "cloud.region",
+        "k8s.cluster.name",
+    } <= set(privacy["allowedResourceAttributes"]):
+        raise ValueError("Trace privacy must preserve service, namespace and regional identity")
     if full["support"]["canary"]["deadlineSeconds"] >= full["support"]["intervalSeconds"]:
         raise ValueError("Canary deadline must be shorter than its interval")
     if full["notifications"]["enabled"] and not (

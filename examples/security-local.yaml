@@ -1,0 +1,9 @@
+version: 1
+serverSecretName: grafana-server
+access:
+  mode: port-forward
+  url: http://localhost:3000
+authentication:
+  mode: local
+internalTransport:
+  mode: cluster-network

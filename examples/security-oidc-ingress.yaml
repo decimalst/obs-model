@@ -1,0 +1,23 @@
+version: 1
+serverSecretName: grafana-server
+access:
+  mode: ingress
+  url: https://grafana.example.com
+  proxyNamespace: ingress-system
+  ingressClassName: shared-ingress
+  tlsSecretName: grafana-tls
+authentication:
+  mode: oauth
+  secretName: grafana-oauth
+  authURL: https://identity.example.com/realms/engineering/protocol/openid-connect/auth
+  tokenURL: https://identity.example.com/realms/engineering/protocol/openid-connect/token
+  userInfoURL: https://identity.example.com/realms/engineering/protocol/openid-connect/userinfo
+  scopes: [openid, profile, email, groups]
+  groupsClaim: groups
+  roles:
+    Viewer: [observability-viewers]
+    Editor: [observability-editors]
+    Admin: [observability-admins]
+  useRefreshToken: false
+internalTransport:
+  mode: cluster-network

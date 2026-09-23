@@ -128,3 +128,9 @@ Run `make studio-test service-test profiling-test` for these additions, alongsid
 The [support guide](docs/support.md) covers the stored-signal canary, Git-reconciled owner/default alert routes using existing Secrets, verified backend scrapes and capacity dashboards, private local support inventories, and catalog-owner debug requests. Canary generation and tenant alert ownership require explicit opt-in; no receiver credentials or environment approvals are invented. Run `make support-test` for native canary, notification and exporter checks.
 
 Upgrading to 0.6 restores safe scraped metrics that the previous combined cardinality rule dropped. Convert custom rules to one forbidden label per rule and review the restored metric volume. The guide includes migration and independent health-monitoring requirements.
+
+## Configuration and deferred AWS qualification
+
+Start with the [setup options](docs/setup-options.md) for local/OIDC access, existing TLS ingress or proxies, external mesh ownership, privacy policy, service graphs, independent cells and recovery choices. Release 0.7 adds validated security profiles, opt-in native-tested redaction and pre-tail service graphs, an offline cell budget preview, and `install.py --render-only` with no AWS/Kubernetes calls. Settings flow through the same regional installer and GitOps compiler.
+
+All real AWS work is collected in the [26-gate qualification batch](docs/live-qualification.md), with an offline evidence ledger and native/external backup setup. Leave live gates pending until the later account rehearsal. Existing resources, IdP/mesh ownership, credential creation, restore execution and real notification tests are never performed by local validation. Full data-plane TLS/authenticated tenancy still requires the documented per-hop integration and acceptance work.

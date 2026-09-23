@@ -93,6 +93,10 @@ spec:
             - name: CLICKHOUSE_PASSWORD
               valueFrom:
                 secretKeyRef: {name: {{ $.Values.logs.secretName }}, key: password}
+          {{- else if $otel }}
+          env:
+            - name: K8S_POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
           {{- end }}
           ports:
             - {name: health, containerPort: {{ if $otel }}13133{{ else if $vector }}8686{{ else }}8080{{ end }}}

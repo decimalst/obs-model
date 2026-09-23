@@ -35,6 +35,7 @@ def load_platform(path):
 def validate_platform(p):
     p = dict(p)
     allowed = {
+        "security_profile",
         "tuning",
         "profiling",
         "network_policy_provider",
@@ -128,6 +129,12 @@ def validate_platform(p):
         raise ValueError("Set a valid storage_class and boolean create_storage_class")
     if "tuning" in p:
         p["tuning"] = validate_tuning(p["tuning"])
+    if "security_profile" in p:
+        try:
+            from .security_config import validate_profile
+        except ImportError:
+            from security_config import validate_profile
+        p["security_profile"] = validate_profile(p["security_profile"])
     return p
 
 

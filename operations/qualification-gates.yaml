@@ -1,0 +1,143 @@
+# Ordered, dependency-aware acceptance batch. No item is executed by the planner.
+version: 1
+gates:
+  - id: environment_identity
+    dependsOn: []
+    checks: [account_region_cluster_match, exact_revision_deployed, deployment_artifact_hashes_match, private_runner_authorized]
+    procedure: docs/live-qualification.md#identity-and-ownership
+    acceptance: Confirm STS identity, EKS ARN, kube context and deployed Git/image digests independently.
+  - id: ownership
+    dependsOn: [environment_identity]
+    checks: [ownership_inventory_reviewed, existing_resources_preserved, state_lock_verified]
+    procedure: docs/live-qualification.md#identity-and-ownership
+    acceptance: Prove managed, existing-EKS or software-only boundaries; no implicit role/controller/CNI adoption.
+  - id: capacity_cost
+    dependsOn: [ownership]
+    checks: [three_az_capacity, quotas_and_headroom, budget_approved, egress_locality]
+    procedure: docs/live-qualification.md#installation-and-security
+    acceptance: Record actual AZ IDs, quotas, baseline/blue-green costs and same-region object/ingestion routes.
+  - id: installation
+    dependsOn: [capacity_cost]
+    checks: [reviewed_plan_applied, pod_identity_proven, storage_proven, all_workloads_ready]
+    procedure: docs/live-qualification.md#installation-and-security
+    acceptance: Run chosen installation path later; verify IAM denial and allow cases, PVC topology, database/object access.
+  - id: network_security
+    dependsOn: [installation]
+    checks: [unauthorized_ingestion_denied, unauthorized_backend_denied, approved_flows_work, tls_verified]
+    procedure: docs/live-qualification.md#installation-and-security
+    acceptance: Probe authorized/unauthorized namespaces, headers/identity forgery, cert trust/expiry and transport capture.
+  - id: sso_authorization
+    dependsOn: [network_security]
+    checks: [login_success, wrong_group_denied, logout_verified, least_privilege_roles, secret_rotation]
+    procedure: docs/live-qualification.md#installation-and-security
+    acceptance: Exercise configured OIDC/SAML/auth-proxy ownership with positive and negative group mappings and rotation.
+  - id: sensitive_data
+    dependsOn: [network_security]
+    checks: [redaction_verified_at_storage, forbidden_metric_labels_rejected, safe_metrics_preserved]
+    procedure: docs/live-qualification.md#data-and-support
+    acceptance: Submit approved synthetic sensitive fixtures and query all storage paths; health endpoints alone do not pass.
+  - id: stored_signals
+    dependsOn: [sensitive_data]
+    checks: [fresh_log_match, fresh_metric_match, fresh_trace_match, partial_ingestion_rejected]
+    procedure: docs/live-qualification.md#data-and-support
+    acceptance: Enable canary and identify fresh exact log/metric/trace values through actual regional Kafka and storage.
+  - id: notifications
+    dependsOn: [stored_signals]
+    checks: [owner_route_delivered, default_route_delivered, resolved_delivered, receiver_secret_rotation]
+    feature: externalNotificationDelivery
+    procedure: docs/live-qualification.md#data-and-support
+    acceptance: User authorizes real test delivery; verify receiver receipt, owner/default/firing/resolution and rotation.
+  - id: log_fairness
+    dependsOn: [stored_signals]
+    checks: [loud_service_limited, healthy_service_survives, errors_spend_budget, valkey_failure_closed]
+    procedure: docs/live-qualification.md#load-and-failure
+    acceptance: Overload one service including ERROR/DEBUG while measuring another; test cache failure and failover burst.
+  - id: metrics_trace_fairness
+    dependsOn: [stored_signals]
+    checks: [metrics_limits_measured, trace_limits_measured, neighboring_service_measured, scope_documented]
+    procedure: docs/live-qualification.md#load-and-failure
+    acceptance: Stress cardinality, metric rate and trace rate; document which pod/tenant scopes protect each neighbor.
+  - id: scaling
+    dependsOn: [log_fairness, metrics_trace_fairness]
+    checks: [keda_lag_response, partition_cap_preserved, ch_shards_distribute, catchup_completes, no_dual_hpa]
+    procedure: docs/live-qualification.md#load-and-failure
+    acceptance: Measure lag-driven writer growth/catchup within partition count and retained ClickHouse quorum; no broker-rebalance inference.
+  - id: blue_green
+    dependsOn: [scaling]
+    checks: [preview_signals_verified, promotion_signals_verified, abort_verified, old_connections_drained]
+    procedure: docs/recovery.md#upgrade-and-roll-forward
+    acceptance: Promote and abort one stateless tier with continuous stored-signal probes and bounded outage/loss evidence.
+  - id: sampler_drain
+    dependsOn: [blue_green]
+    checks: [trace_affinity_verified, ordinal_drain_verified, loss_measured, no_hpa_or_bulk_replacement]
+    procedure: docs/recovery.md#upgrade-and-roll-forward
+    acceptance: Drain and replace one sampler ordinal; compare trace completeness before/during/after without claiming losslessness.
+  - id: backup_restore
+    dependsOn: [stored_signals]
+    checks: [isolated_destination, source_unmodified, backups_verified, all_enabled_backends_restored, historical_queries_match, secret_recovery_verified, rpo_met, rto_met]
+    measurements: [data_gap_minutes, recovery_minutes]
+    procedure: docs/recovery.md#isolated-restore
+    acceptance: Restore the native or externally managed backup set into distinct regional resources and compare known historical identities.
+  - id: upgrade_rollforward
+    dependsOn: [backup_restore, sampler_drain]
+    checks: [compatibility_reviewed, schema_migration_rehearsed, one_member_at_a_time, rollforward_verified, historical_queries_match]
+    procedure: docs/recovery.md#upgrade-and-roll-forward
+    acceptance: Rehearse the exact source/target versions, CRDs and schema sequence in the isolated restore; prove a forward repair.
+  - id: az_loss
+    dependsOn: [backup_restore, scaling, sampler_drain]
+    checks: [approved_fault_scope, quorum_preserved, signals_measured_during_fault, healing_verified, rpo_met, rto_met]
+    measurements: [data_gap_minutes, recovery_minutes]
+    procedure: docs/live-qualification.md#load-and-failure
+    acceptance: Execute one approved AZ failure at a time with stop conditions; verify surviving writes/reads then full quorum recovery.
+  - id: regional_recovery
+    dependsOn: [backup_restore, az_loss, upgrade_rollforward]
+    checks: [failure_domain_recorded, surviving_region_independent, source_fenced, duplicate_replay_assessed, recovery_measured]
+    procedure: docs/recovery.md#regional-recovery
+    acceptance: Qualify region-local recovery or document region-loss history unavailability; do not claim remote history without replication.
+  - id: cross_region
+    dependsOn: [regional_recovery]
+    feature: crossRegion
+    checks: [replication_lag_measured, keys_and_permissions_verified, isolated_remote_restore, offsets_translated, source_fenced, cost_measured, rpo_met, rto_met]
+    measurements: [data_gap_minutes, recovery_minutes]
+    procedure: docs/recovery.md#regional-recovery
+    acceptance: Opt-in only; prove historical remote restore, RPO/RTO, Kafka offsets/topic mapping and transfer/storage costs.
+  - id: gitops
+    dependsOn: [blue_green]
+    feature: gitops
+    checks: [pipeline_pr_reconciles, dashboards_rules_catalog_reconcile, bounded_drift_repair, ownership_preserved]
+    procedure: docs/live-qualification.md#optional-capabilities-and-handover
+    acceptance: Merge reviewed fixtures and verify actual reconciliation; drift repair excludes only controller-owned fields.
+  - id: debug_expiry
+    dependsOn: [stored_signals]
+    checks: [owner_scope_enforced, foreign_workload_denied, expiry_during_collection, malformed_timestamp_denied, replacement_pods_expire]
+    procedure: docs/live-qualification.md#optional-capabilities-and-handover
+    acceptance: Use protected workflow identity; prove exact scope, 24-hour bound and runtime expiry independent of cleanup.
+  - id: hubble
+    dependsOn: [network_security, stored_signals]
+    feature: hubble
+    checks: [cni_owner_unchanged, actual_flow_metrics, bounded_dimensions, private_ui_authorization]
+    procedure: docs/ebpf.md
+    acceptance: Network owner enables compatible Hubble settings; prove actual flows without observability adopting Cilium.
+  - id: profiling
+    dependsOn: [network_security, stored_signals, backup_restore]
+    feature: profiling
+    checks: [privilege_approved, optin_selection_enforced, regional_flamegraph, profile_limits, metastore_restore_verified]
+    procedure: docs/ebpf.md
+    acceptance: Prove kernel/runtime compatibility, selected workloads only, regional samples and Pyroscope metastore/object restoration.
+  - id: flink
+    dependsOn: [backup_restore, stored_signals]
+    feature: flink
+    checks: [checkpoint_valid, savepoint_restore, stable_operator_uids, connector_replay_assessed]
+    procedure: docs/flink.md
+    acceptance: Restore pinned user job/connector state into the isolated destination; verify sink replay behavior and offsets.
+  - id: service_graphs
+    dependsOn: [stored_signals, sampler_drain]
+    feature: serviceGraphs
+    checks: [cross_node_pairing, pre_tail_graph, bounded_dimensions, orphan_visibility]
+    procedure: docs/live-qualification.md#optional-capabilities-and-handover
+    acceptance: Exercise cross-node client/server pairs, dropped peers, cache limits and sampled SDK behavior.
+  - id: handover
+    dependsOn: [sso_authorization, regional_recovery, debug_expiry]
+    checks: [oncall_owner_named, operational_budgets_set, retention_reviewed, pending_scope_disclosed, cleanup_plan_reviewed]
+    procedure: docs/live-qualification.md#optional-capabilities-and-handover
+    acceptance: Review every enabled gate, record unresolved limits, ongoing checks, retention and separately approved cleanup ownership.

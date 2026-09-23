@@ -1,0 +1,416 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "pattern": "^[0-9]{12}$"
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$"
+        },
+        "cluster": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+        },
+        "mode": {
+          "enum": [
+            "managed",
+            "existing",
+            "software-only"
+          ]
+        },
+        "context": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "namespace": {
+          "const": "observability"
+        }
+      },
+      "required": [
+        "accountId",
+        "region",
+        "cluster",
+        "mode",
+        "context",
+        "namespace"
+      ]
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hubble": {
+          "type": "boolean"
+        },
+        "profiling": {
+          "type": "boolean"
+        },
+        "flink": {
+          "type": "boolean"
+        },
+        "gitops": {
+          "type": "boolean"
+        },
+        "serviceGraphs": {
+          "type": "boolean"
+        },
+        "externalNotificationDelivery": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hubble",
+        "profiling",
+        "flink",
+        "gitops",
+        "serviceGraphs",
+        "externalNotificationDelivery"
+      ]
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "backupMode": {
+          "enum": [
+            "native",
+            "external"
+          ]
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "providerRef": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rpoMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 525600
+        },
+        "rtoMinutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 525600
+        },
+        "destination": {
+          "$ref": "#/$defs/identity"
+        },
+        "crossRegion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "rpoMinutes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 525600
+            },
+            "rtoMinutes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 525600
+            },
+            "costAssessmentRef": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "enabled",
+            "rpoMinutes",
+            "rtoMinutes",
+            "costAssessmentRef"
+          ]
+        }
+      },
+      "required": [
+        "backupMode",
+        "owner",
+        "providerRef",
+        "rpoMinutes",
+        "rtoMinutes",
+        "destination",
+        "crossRegion"
+      ]
+    },
+    "deploymentArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platformContractSHA256",
+        "renderedValuesSHA256",
+        "terraformPlanSHA256"
+      ],
+      "properties": {
+        "platformContractSHA256": {
+          "$ref": "#/$defs/digest"
+        },
+        "renderedValuesSHA256": {
+          "$ref": "#/$defs/digest"
+        },
+        "terraformPlanSHA256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/digest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "required": [
+    "version",
+    "runId",
+    "sourceRevision",
+    "environment",
+    "features",
+    "recovery",
+    "deploymentArtifacts"
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "pattern": "^[0-9]{12}$"
+        },
+        "region": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-gov)?-[a-z]+-[0-9]+$"
+        },
+        "cluster": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$"
+        }
+      },
+      "required": [
+        "accountId",
+        "region",
+        "cluster"
+      ]
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$"
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "configDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "planDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "version",
+        "runId",
+        "configDigest",
+        "planDigest",
+        "createdAt"
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "configDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "gate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ]
+        },
+        "startedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "completedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "operator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "checks": {
+          "type": "object",
+          "maxProperties": 50,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+          },
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "measurements": {
+          "type": "object",
+          "maxProperties": 50,
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:/-]*$"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "runId",
+        "configDigest",
+        "gate",
+        "status",
+        "startedAt",
+        "completedAt",
+        "operator",
+        "reason",
+        "checks",
+        "measurements",
+        "evidenceRefs"
+      ]
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "receipt": {
+          "$ref": "#/$defs/receipt"
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "receipt",
+        "sha256"
+      ]
+    }
+  }
+}

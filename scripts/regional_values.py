@@ -107,6 +107,12 @@ def values(platform, quota_image):
                 },
             }
         }
+    if "security_profile" in platform:
+        try:
+            from .security_config import compile_profile
+        except ImportError:
+            from security_config import compile_profile
+        generated = merge(generated, compile_profile(platform["security_profile"])["values"])
     return merge(generated, validate_tuning(platform.get("tuning", {})))
 
 
@@ -125,9 +131,17 @@ def main():
     p.add_argument("--terraform-output", type=pathlib.Path, required=True)
     p.add_argument("--quota-image", required=True)
     p.add_argument("--tuning", type=pathlib.Path)
+    p.add_argument("--security-profile", type=pathlib.Path)
     p.add_argument("--output", type=pathlib.Path, required=True)
     args = p.parse_args()
     platform = load_platform(args.terraform_output)
+    if args.security_profile:
+        try:
+            from .security_config import load_profile
+        except ImportError:
+            from security_config import load_profile
+
+        platform["security_profile"] = load_profile(args.security_profile)
     if args.tuning:
         platform["tuning"] = merge(platform.get("tuning", {}), load_tuning(args.tuning))
     result = values(platform, args.quota_image)

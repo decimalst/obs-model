@@ -1,0 +1,37 @@
+# Offline qualification settings, not Helm values or an automatic restore definition.
+version: 1
+runId: existing-eks-recovery-001
+sourceRevision: '0000000000000000000000000000000000000000'
+deploymentArtifacts:
+  platformContractSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  renderedValuesSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  terraformPlanSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+environment:
+  accountId: '123456789012'
+  region: us-west-2
+  cluster: shared-eks-lab
+  context: shared-eks-lab
+  namespace: observability
+  mode: existing
+features:
+  hubble: true
+  profiling: true
+  flink: false
+  gitops: true
+  serviceGraphs: true
+  externalNotificationDelivery: true
+recovery:
+  backupMode: external
+  owner: database-operations
+  providerRef: RUNBOOK-EXTERNAL-BACKUP
+  rpoMinutes: null
+  rtoMinutes: null
+  destination:
+    accountId: '123456789012'
+    region: us-west-2
+    cluster: independent-restore-lab
+  crossRegion:
+    enabled: false
+    rpoMinutes: null
+    rtoMinutes: null
+    costAssessmentRef: null

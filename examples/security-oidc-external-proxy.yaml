@@ -1,0 +1,20 @@
+version: 1
+serverSecretName: grafana-server
+access:
+  mode: external-proxy
+  url: https://grafana.example.com
+  proxyNamespace: edge-system
+authentication:
+  mode: oauth
+  secretName: grafana-oauth
+  authURL: https://identity.example.com/oauth2/default/v1/authorize
+  tokenURL: https://identity.example.com/oauth2/default/v1/token
+  userInfoURL: https://identity.example.com/oauth2/default/v1/userinfo
+  scopes: [openid, profile, email, groups, offline_access]
+  groupsClaim: groups
+  roles:
+    Viewer: [observability-viewers]
+    Admin: [observability-admins]
+  useRefreshToken: true
+internalTransport:
+  mode: cluster-network

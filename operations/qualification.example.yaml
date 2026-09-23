@@ -1,0 +1,37 @@
+# Copy outside Git and replace identities/revision. This example executes nothing.
+version: 1
+runId: qualification-lab-001
+sourceRevision: '0000000000000000000000000000000000000000'
+deploymentArtifacts:
+  platformContractSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  renderedValuesSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  terraformPlanSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+environment:
+  accountId: '123456789012'
+  region: us-east-1
+  cluster: olly-lab
+  context: olly-lab
+  namespace: observability
+  mode: managed # managed | existing | software-only
+features:
+  hubble: false
+  profiling: false
+  flink: false
+  gitops: true
+  serviceGraphs: false
+  externalNotificationDelivery: true
+recovery:
+  backupMode: native # native | external
+  owner: platform-operations
+  providerRef: null # Required for external mode, e.g. RUNBOOK-123; never credentials.
+  rpoMinutes: null # Must be reviewed numeric targets before recovery can pass.
+  rtoMinutes: null
+  destination:
+    accountId: '123456789012'
+    region: us-east-1
+    cluster: olly-restore-lab
+  crossRegion:
+    enabled: false
+    rpoMinutes: null
+    rtoMinutes: null
+    costAssessmentRef: null

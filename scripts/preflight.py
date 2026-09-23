@@ -51,6 +51,44 @@ def require(ok, message):
         raise ValueError(message)
 
 
+def security_prerequisites(profile, reader):
+    try:
+        from .security_config import compile_profile
+    except ImportError:
+        from security_config import compile_profile
+    requirements = compile_profile(profile)["prerequisites"]
+    for kind, entries in [
+        ("secret", requirements["secrets"]),
+        ("configmap", requirements["configMaps"]),
+    ]:
+        for entry in entries:
+            found = reader(
+                [
+                    "kubectl",
+                    "--request-timeout=20s",
+                    "-n",
+                    requirements["namespace"],
+                    "get",
+                    kind,
+                    entry["name"],
+                    "-o",
+                    'go-template={"keys":{ {{range $k, $v := .data}}'
+                    '{{printf "%q: true," $k}}{{end}}"_end":true}}',
+                ]
+            )
+            require(
+                set(entry["keys"]) <= set(found["keys"]),
+                f"Security profile {kind} {entry['name']} is missing required keys",
+            )
+    for kind, names in [
+        ("namespace", [requirements["proxyNamespace"]]),
+        ("ingressclass", [requirements["ingressClassName"]]),
+        ("crd", requirements["meshCRDs"]),
+    ]:
+        for name in filter(None, names):
+            reader(["kubectl", "--request-timeout=20s", "get", kind, name, "-o", "json"])
+
+
 def validate_generated_inputs(platform, manifest, controllers):
     """Do not let a stale overlay target another region or take over an excluded controller."""
     expected = values(platform, manifest.get("images", {}).get("quota", ""))
@@ -62,6 +100,15 @@ def validate_generated_inputs(platform, manifest, controllers):
             )
         return actual == wanted
 
+    if "security_profile" in platform:
+        # Grafana environment variables and startup/mount options can override INI
+        # settings. Subset matching alone would accept an extra authentication
+        # bypass even while every compiled profile setting remains present.
+        require(
+            manifest.get("grafana") == expected["grafana"],
+            "Generated Grafana values do not match the selected security profile; "
+            "regenerate with install.py instead of adding Grafana override channels.",
+        )
     require(
         includes(manifest, expected) and includes(controllers, operator_values(platform)),
         "Generated overlays do not match the checked platform configuration; "
@@ -477,6 +524,8 @@ def preflight(p, reader=read):
             required <= set(found["keys"]), "Alert receiver Secret is missing required URL keys"
         )
     p["operator_namespaces"] = sorted(namespaces)
+    if "security_profile" in p:
+        security_prerequisites(p["security_profile"], reader)
     print(
         "Verified cluster identity, AZs, node prerequisites, ownership, regional "
         "buckets and Pod Identity associations. No remote changes made.",

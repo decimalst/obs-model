@@ -66,3 +66,16 @@
 {{- if and .Values.support.canary.enabled (le (int .Values.support.canary.deadlineSeconds) (add (int .Values.collectors.traceDecisionWaitSeconds) (mul 2 (int .Values.support.canary.pollSeconds)))) }}
 {{- fail "Canary deadline must allow the tail decision wait and query polling" }}
 {{- end }}
+{{- if and .Values.serviceGraph.enabled (empty .Values.serviceGraph.services) }}
+{{- fail "Service graph requires an explicit service allowlist" }}
+{{- end }}
+{{- $previousGraphBucket := 0.0 }}
+{{- range .Values.serviceGraph.histogramBucketsSeconds }}
+{{- if le (float64 .) $previousGraphBucket }}{{- fail "Service graph histogram buckets must be strictly increasing" }}{{- end }}
+{{- $previousGraphBucket = float64 . }}
+{{- end }}
+{{- if eq .Values.privacy.traces.mode "allowlist" }}
+{{- range list "service.name" "service.namespace" "cloud.region" "k8s.cluster.name" }}
+{{- if not (has . $.Values.privacy.traces.allowedResourceAttributes) }}{{- fail "Trace privacy must preserve service, namespace and regional identity" }}{{- end }}
+{{- end }}
+{{- end }}

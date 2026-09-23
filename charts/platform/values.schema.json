@@ -1049,6 +1049,143 @@
           }
         }
       }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "off",
+                "redact",
+                "drop"
+              ]
+            },
+            "patterns": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "email",
+                  "bearer",
+                  "credential"
+                ]
+              }
+            }
+          },
+          "required": [
+            "mode",
+            "patterns"
+          ]
+        },
+        "traces": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "off",
+                "allowlist"
+              ]
+            },
+            "keepSpanName": {
+              "type": "boolean"
+            },
+            "allowedSpanAttributes": {
+              "type": "array",
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]{0,127}$"
+              }
+            },
+            "allowedResourceAttributes": {
+              "type": "array",
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][a-zA-Z0-9_.-]{0,127}$"
+              }
+            }
+          },
+          "required": [
+            "mode",
+            "keepSpanName",
+            "allowedSpanAttributes",
+            "allowedResourceAttributes"
+          ]
+        }
+      },
+      "required": [
+        "logs",
+        "traces"
+      ]
+    },
+    "serviceGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "services": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$"
+          }
+        },
+        "storeTTLSeconds": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 120
+        },
+        "storeMaxItems": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 100000
+        },
+        "flushIntervalSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 60
+        },
+        "cacheLoopSeconds": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 120
+        },
+        "histogramBucketsSeconds": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 120
+          }
+        }
+      },
+      "required": [
+        "enabled",
+        "services",
+        "storeTTLSeconds",
+        "storeMaxItems",
+        "flushIntervalSeconds",
+        "cacheLoopSeconds",
+        "histogramBucketsSeconds"
+      ]
     }
   },
   "definitions": {

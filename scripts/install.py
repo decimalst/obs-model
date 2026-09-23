@@ -35,14 +35,27 @@ def main():
     parser.add_argument(
         "--tuning", type=pathlib.Path, help="Validated nonsecret pipeline overrides"
     )
-    parser.add_argument(
+    parser.add_argument("--security-profile", type=pathlib.Path)
+    validation = parser.add_mutually_exclusive_group()
+    validation.add_argument(
         "--check-only",
         action="store_true",
         help="Read cloud/cluster state and render; do not change AWS or Kubernetes",
     )
+    validation.add_argument(
+        "--render-only",
+        action="store_true",
+        help="Validate and render locally; no AWS, Kubernetes or deployment calls",
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, default=pathlib.Path("build/install"))
     args = parser.parse_args()
     p = load_platform(args.config)
+    if args.security_profile:
+        try:
+            from .security_config import load_profile
+        except ImportError:
+            from security_config import load_profile
+        p["security_profile"] = load_profile(args.security_profile)
     if args.tuning:
         p["tuning"] = merge(p.get("tuning", {}), load_tuning(args.tuning))
     p["operators"].update({name: False for name in args.reuse_operators})
@@ -50,7 +63,8 @@ def main():
         p.update(storage_class=args.existing_storage_class, create_storage_class=False)
     generated = values(p, args.quota_image)
     # All remote calls before deployment are read-only; never change kubeconfig.
-    preflight(p)
+    if not args.render_only:
+        preflight(p)
     generated["networkPolicy"]["operatorNamespaces"] = p.get(
         "operator_namespaces", ["observability-system"]
     )
@@ -63,13 +77,32 @@ def main():
     )
     config = directory / "platform.json"
     write_platform(p, config)
+    if "security_profile" in p:
+        import json
+
+        try:
+            from .security_config import compile_profile
+        except ImportError:
+            from security_config import compile_profile
+        security = compile_profile(p["security_profile"])
+        (directory / "security-prerequisites.json").write_text(
+            json.dumps(security["prerequisites"], indent=2) + "\n"
+        )
+        (directory / "external-policy-examples.yaml").write_text(
+            yaml.safe_dump_all(security["externalPolicyExamples"], sort_keys=False)
+        )
     subprocess.run(
         ["helm", "template", "olly", "charts/platform", "-n", "observability", "-f", str(manifest)],
         check=True,
         stdout=subprocess.DEVNULL,
     )
-    print(f"Preflight and chart rendering passed. Configuration: {manifest}", flush=True)
-    if not args.check_only:
+    status = (
+        "Offline validation and rendering passed; live preflight is pending"
+        if args.render_only
+        else "Preflight and chart rendering passed"
+    )
+    print(f"{status}. Configuration: {manifest}", flush=True)
+    if not (args.check_only or args.render_only):
         subprocess.run(
             ["bash", "scripts/deploy.sh", str(manifest), str(config)],
             check=True,

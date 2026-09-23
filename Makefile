@@ -104,3 +104,11 @@ studio-terraform-test: studio-test
 support-test:
 	$(PYTHON) scripts/support_test.py
 	$(PYTHON) scripts/kafka_metrics_test.py
+
+.PHONY: privacy-graph-test security-test qualification-test
+privacy-graph-test:
+	$(PYTHON) scripts/privacy_graph_test.py
+security-test:
+	$(PYTHON) scripts/security_test.py
+qualification-test:
+	$(PYTHON) -m unittest discover -s tests -p test_qualification.py -v

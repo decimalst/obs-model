@@ -417,6 +417,8 @@ grafana:
         url: http://tempo-query-frontend:3200
         access: proxy
         jsonData:
+          serviceMap:
+            datasourceUid: mimir
           tracesToLogsV2:
             datasourceUid: clickhouse
             spanStartTimeShift: -5m
@@ -779,3 +781,49 @@ notifications:
   secretName: alert-receivers
   defaultReceiverKey: default-url
   owners: {}
+
+privacy:
+  logs:
+    mode: 'off'
+    patterns:
+    - email
+    - bearer
+    - credential
+  traces:
+    mode: 'off'
+    keepSpanName: false
+    allowedSpanAttributes:
+    - http.request.method
+    - http.response.status_code
+    - http.status_code
+    - rpc.system
+    - db.system
+    - messaging.system
+    allowedResourceAttributes:
+    - service.name
+    - service.namespace
+    - service.instance.id
+    - k8s.namespace.name
+    - k8s.pod.uid
+    - k8s.node.name
+    - cloud.region
+    - k8s.cluster.name
+serviceGraph:
+  enabled: false
+  services: []
+  storeTTLSeconds: 30
+  storeMaxItems: 10000
+  flushIntervalSeconds: 15
+  cacheLoopSeconds: 60
+  histogramBucketsSeconds:
+  - 0.005
+  - 0.01
+  - 0.025
+  - 0.05
+  - 0.1
+  - 0.25
+  - 0.5
+  - 1
+  - 2.5
+  - 5
+  - 10

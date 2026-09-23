@@ -44,9 +44,18 @@ data:
         key_field: '{{ "{{ service_key }}" }}'
         threshold: {{ .Values.logs.agentEventsPerSecond }}
         window_secs: 1
-      cleanup:
+      {{- if ne .Values.privacy.logs.mode "off" }}
+      privacy:
         type: remap
         inputs: [debug_gate]
+        drop_on_abort: true
+        drop_on_error: true
+        source: |
+          {{- include "olly.logPrivacy" . | nindent 10 }}
+      {{- end }}
+      cleanup:
+        type: remap
+        inputs: [{{ if eq .Values.privacy.logs.mode "off" }}debug_gate{{ else }}privacy{{ end }}]
         source: 'del(.debug_allowed)'
     sinks:
       quota:
@@ -97,10 +106,20 @@ data:
           method: newline_delimited
       internal:
         type: internal_metrics
+    {{- if ne .Values.privacy.logs.mode "off" }}
+    transforms:
+      privacy:
+        type: remap
+        inputs: [admitted]
+        drop_on_abort: true
+        drop_on_error: true
+        source: |
+          {{- include "olly.logPrivacy" . | nindent 10 }}
+    {{- end }}
     sinks:
       kafka:
         type: kafka
-        inputs: [admitted]
+        inputs: [{{ if eq .Values.privacy.logs.mode "off" }}admitted{{ else }}privacy{{ end }}]
         bootstrap_servers: telemetry-kafka-bootstrap:9092
         topic: logs
         acknowledgements:

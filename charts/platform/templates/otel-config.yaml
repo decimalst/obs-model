@@ -65,9 +65,15 @@ data:
           - key: k8s.cluster.name
             value: {{ $.Values.clusterName }}
             action: upsert
-    {{- if or (eq $role "agent") (eq $role "metrics") }}
+    {{- if or (eq $role "agent") (eq $role "metrics") (and (eq $role "traces") $.Values.serviceGraph.enabled) }}
       filter/cardinality:
         {{- include "olly.metricFilter" $ | nindent 8 }}
+    {{- end }}
+    {{- if and (ne $role "metrics") (eq $.Values.privacy.traces.mode "allowlist") }}
+      {{- include "olly.tracePrivacy" $ | nindent 6 }}
+    {{- end }}
+    {{- if and (eq $role "traces") $.Values.serviceGraph.enabled }}
+      {{- include "olly.graphProcessors" $ | nindent 6 }}
     {{- end }}
     {{- if and (eq $role "agent") $.Values.spanMetrics.enabled }}
       filter/red:
@@ -173,7 +179,18 @@ data:
         exemplars: {enabled: false}
         events: {enabled: false}
     {{- end }}
+    {{- if and (eq $role "traces") $.Values.serviceGraph.enabled }}
+    connectors:
+      {{- include "olly.graphConnector" $ | nindent 6 }}
+    {{- end }}
     exporters:
+    {{- if and (eq $role "traces") $.Values.serviceGraph.enabled }}
+      {{ include "olly.interconnect" $ }}/graph:
+        endpoint: otel-metrics:4317
+        {{- include "olly.arrowExport" $ | nindent 8 }}
+        tls: {insecure: true}
+        {{- include "olly.interconnectQueue" $ | nindent 8 }}
+    {{- end }}
     {{- if eq $role "agent" }}
       {{ include "olly.interconnect" $ }}/metrics:
         endpoint: otel-metrics:4317
@@ -228,12 +245,22 @@ data:
     {{- if and (eq $role "agent") $.Values.spanMetrics.enabled }}
         traces/red:
           receivers: [otlp]
-          processors: [memory_limiter, resource, filter/red, transform/red]
+          processors: [memory_limiter, resource, {{ if eq $.Values.privacy.traces.mode "allowlist" }}filter/privacy, transform/privacy, {{ end }}filter/red, transform/red]
           exporters: [spanmetrics/red]
         metrics/red:
           receivers: [spanmetrics/red]
           processors: [memory_limiter, filter/cardinality, batch]
           exporters: [{{ include "olly.interconnect" $ }}/metrics]
+    {{- end }}
+    {{- if and (eq $role "traces") $.Values.serviceGraph.enabled }}
+        traces/servicegraph:
+          receivers: [otlp]
+          processors: [memory_limiter, {{ if eq $.Values.privacy.traces.mode "allowlist" }}filter/privacy, transform/privacy, {{ end }}filter/servicegraph, transform/servicegraph]
+          exporters: [servicegraph]
+        metrics/servicegraph:
+          receivers: [servicegraph]
+          processors: [memory_limiter, resource, resource/servicegraph, filter/cardinality, batch]
+          exporters: [{{ include "olly.interconnect" $ }}/graph]
     {{- end }}
     {{- if or (eq $role "agent") (eq $role "metrics") }}
         metrics:
@@ -244,7 +271,7 @@ data:
     {{- if ne $role "metrics" }}
         traces:
           receivers: [{{ $receiver }}{{ if eq $receiver "otelarrow" }}, otlp/http{{ end }}]
-          processors: [memory_limiter, resource, {{ if eq $role "traces" }}tail_sampling, {{ end }}batch]
+          processors: [memory_limiter, resource, {{ if eq $.Values.privacy.traces.mode "allowlist" }}filter/privacy, transform/privacy, {{ end }}{{ if eq $role "traces" }}tail_sampling, {{ end }}batch]
           exporters: [{{ if eq $role "agent" }}{{ include "olly.interconnect" $ }}/traces{{ else if eq $role "router" }}loadbalancing{{ else }}otlp/tempo{{ end }}]
     {{- end }}
 {{- end }}

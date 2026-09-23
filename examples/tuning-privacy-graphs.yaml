@@ -1,0 +1,16 @@
+# Reviewed opt-ins; do not apply until the owners approve intentional data loss.
+# See docs/privacy-and-service-graphs.md and use --render-only first.
+privacy:
+  logs:
+    mode: redact # off | redact | drop
+    patterns: [email, bearer, credential]
+  traces:
+    mode: allowlist # Drops linked spans and events; preserves only approved attributes.
+    keepSpanName: false
+serviceGraph:
+  enabled: true
+  # Replace with actual globally distinct names within this cell, at most 64.
+  services: [checkout, payments]
+  storeTTLSeconds: 30
+  storeMaxItems: 10000
+  flushIntervalSeconds: 15

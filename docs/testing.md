@@ -26,6 +26,8 @@ The optional Flink chart/CR can be rendered and schema-validated using a dummy j
 
 ## Required acceptance in a disposable AWS environment
 
+The authoritative deferred run order and evidence contract now live in [live-qualification.md](live-qualification.md) and `operations/qualification-gates.yaml`. The checklist below explains existing scenarios; record their results in that one batch. Do not create infrastructure or contact live IdPs/notification receivers during local validation. `install.py --render-only` is fully offline; `--check-only` still contacts real AWS/Kubernetes APIs read-only.
+
 Do not label the platform production-validated until these tests run on the intended versions and topology, with evidence retained:
 
 1. Provision each region from its own state and generated coordinates. Validate EKS access, Pod Identity credentials, encrypted EBS, S3 policies, RDS/Valkey authentication, autoscaler scale-up, pod placement across physical AZs, and network policy enforcement.
@@ -54,3 +56,11 @@ For browser acceptance, test the environment/capacity/visibility/review steps, b
 Run `make support-test` for exact stored log/metric/trace checks using real local backends, Mimir tenant configuration and local owner/default alert delivery, backend scraping through Arrow/remote write, dashboard query execution and pinned Kafka exporter lag/replication metrics. `make rules-test` covers failed, missing, stalled and healthy support checks plus sustained Kafka backlog/replication failures. Unit tests cover stale/wrong identities, partial ingestion, receiver validation, safe support projection and owner-scoped debug requests. No cloud calls or real pages are part of these tests.
 
 The local support fixture starts the pinned support runtime without credentials when checks are disabled, and tests the rendered canary profile against native ClickHouse: bounded reads succeed, writes and scan-limit overrides fail. It uses Prometheus in place of Mimir metrics storage, single-node Tempo/ClickHouse, synthetic Kubernetes log metadata, and a direct Vector storage sink. Existing integration/consumer/sharding suites separately cover Kafka and replicated storage. The trace fixture bypasses tail routing; `collector-test` checks trace affinity and sampling. Qualify the full deployed canary, independent health polling, actual alert receivers/resolution, credential rotation, private networking and failure/recovery on EKS before production. The scrape test checks actual retained samples, not merely `up=1`.
+
+## Privacy, graph, security and offline planning
+
+`make privacy-graph-test` uses real Vector and collectors to test redaction/drop behavior, malformed payload rejection, trace event/link/attribute treatment, client/server pairing before a 0% tail policy, independent metric writers and exported units. It also rejects unlisted service names. The graph fixture substitutes Prometheus for Mimir and files for retained traces; EKS placement, actual Grafana service-map navigation and sustained cardinality/memory behavior remain deferred.
+
+`make security-test` starts pinned Grafana with rendered settings and synthetic Secret values. It rejects anonymous/local-password access in OAuth mode and validates callback/PKCE generation without following a redirect to an IdP. Unit tests cover unsafe input rejection, key-only preflight, real Helm/Flux profile propagation and external ownership. Mesh policies are external-owner examples and require live version/enforcement checks.
+
+`make qualification-test` exercises offline planning, evidence binding, dependency invalidation, recovery bounds and pending/failure cases. Cell planner and offline installer tests run under `make check`. The qualification ledger records operator attestations; it does not independently inspect AWS or prove an evidence reference's content. No live gate becomes passed merely because a template was generated.

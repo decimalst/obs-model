@@ -1,0 +1,37 @@
+# Only a plan example. This does not provision or enable replication.
+version: 1
+runId: regional-restore-001
+sourceRevision: '0000000000000000000000000000000000000000'
+deploymentArtifacts:
+  platformContractSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  renderedValuesSHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+  terraformPlanSHA256: null
+environment:
+  accountId: '123456789012'
+  region: us-east-1
+  cluster: source-lab
+  context: source-lab
+  namespace: observability
+  mode: software-only
+features:
+  hubble: false
+  profiling: false
+  flink: false
+  gitops: true
+  serviceGraphs: false
+  externalNotificationDelivery: true
+recovery:
+  backupMode: external
+  owner: disaster-recovery-team
+  providerRef: RUNBOOK-CROSS-REGION
+  rpoMinutes: null
+  rtoMinutes: null
+  destination:
+    accountId: '210987654321'
+    region: us-west-2
+    cluster: destination-lab
+  crossRegion:
+    enabled: true
+    rpoMinutes: null
+    rtoMinutes: null
+    costAssessmentRef: null # Required before passing; include egress, requests and copies.

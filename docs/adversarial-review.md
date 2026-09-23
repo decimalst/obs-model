@@ -62,6 +62,8 @@ Kafka consumers now scale from committed-offset lag through KEDA, with 36 partit
 
 ## Pinned implementation references
 
+The 0.7 pass adds further explicit boundaries: privacy presets are selective/lossy rather than universal sensitive-data detection; service graph pairing uses trace-affine fixed samplers before tail sampling and a bounded name set, while duplicate names can merge services; OAuth uses existing credentials, strict group roles and a retained shared Grafana encryption key; generated mesh policies cover Grafana only; dedicated cell plans check declared backend separation without claiming verified IAM isolation. The offline qualification ledger binds operator evidence to revision/configuration/artifact hashes, rejects unfinished or stale dependency chains, and never executes AWS commands. See [setup options](setup-options.md) for the deployed versus externally integrated parts and their migration procedures.
+
 - [Arrow receiver configuration, v0.148.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/receiver/otelarrowreceiver/config.go) and [Arrow exporter queue/protocol behavior](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/exporter/otelarrowexporter/README.md).
 - [Trace load-balancing protocol support, v0.148.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/exporter/loadbalancingexporter/config.go).
 - [Mimir 3.2.0 ingestion/query limits](https://github.com/grafana/mimir/blob/mimir-3.2.0/pkg/util/validation/limits.go).
