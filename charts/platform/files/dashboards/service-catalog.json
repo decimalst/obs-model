@@ -1,0 +1,27 @@
+{
+  "uid": "service-catalog",
+  "title": "Service catalog",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "tags": [
+    "catalog"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Register your first service",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Register a service through the configuration studio, then commit its definition under catalog/services/. The catalog is generated during review and provisioned by Grafana."
+      }
+    }
+  ]
+}

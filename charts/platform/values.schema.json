@@ -732,6 +732,231 @@
           }
         }
       }
+    },
+    "hubble": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "metricsPort",
+        "sampleLimit"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "metricsPort": {
+          "const": 9965
+        },
+        "sampleLimit": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 50000
+        }
+      }
+    },
+    "profiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "image",
+        "namespaces",
+        "sampleRate",
+        "collectIntervalSeconds",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "string",
+          "pattern": "^grafana/alloy:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "namespaces": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+            "maxLength": 63
+          }
+        },
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 99
+        },
+        "collectIntervalSeconds": {
+          "type": "integer",
+          "minimum": 15,
+          "maximum": 300
+        },
+        "resources": {
+          "$ref": "#/definitions/componentResources"
+        }
+      }
+    },
+    "pyroscope": {
+      "type": "object",
+      "properties": {
+        "pyroscope": {
+          "type": "object",
+          "properties": {
+            "structuredConfig": {
+              "type": "object",
+              "properties": {
+                "limits": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "max_profile_size_bytes": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 16777216
+                    },
+                    "max_profile_stacktrace_samples": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 100000
+                    },
+                    "max_profile_stacktrace_depth": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1000
+                    },
+                    "max_profile_stacktrace_sample_labels": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 16
+                    },
+                    "max_label_names_per_series": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 30
+                    },
+                    "max_label_value_length": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 128
+                    },
+                    "ingestion_rate_mb": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 1024
+                    },
+                    "ingestion_burst_size_mb": {
+                      "type": "number",
+                      "minimum": 0.1,
+                      "maximum": 1024
+                    },
+                    "retention_period": {
+                      "type": "string",
+                      "pattern": "^[1-9][0-9]{0,3}h$"
+                    }
+                  }
+                }
+              }
+            },
+            "components": {
+              "type": "object",
+              "properties": {
+                "distributor": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "query-frontend": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "query-backend": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "segment-writer": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "metastore": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "const": 3
+                    }
+                  }
+                },
+                "compaction-worker": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "tenant-settings": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 2,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "ad-hoc-profiles": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 2,
+                      "maximum": 30
+                    }
+                  }
+                },
+                "admin": {
+                  "type": "object",
+                  "properties": {
+                    "replicaCount": {
+                      "type": "integer",
+                      "minimum": 2,
+                      "maximum": 30
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {

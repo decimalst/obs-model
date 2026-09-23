@@ -57,3 +57,9 @@ The diagram was treated as reference data, not as deployment instructions. See `
 ## Service RED metrics
 
 The agent's OTLP receiver fans out into the original trace path and a separate span-metrics branch before tail sampling. The branch selects server spans, normalizes only its copy, bounds aggregation, and gives generated metrics a distinct agent writer identity. It rejoins the Arrow metrics transport and existing Mimir policy. Direct application metrics retain their own writer identities. See [RED semantics and cardinality scope](service-red.md) and [remaining capabilities](platform-gaps.md).
+
+## Optional eBPF visibility and service experience
+
+The regional cell can add Alloy eBPF CPU collection and Pyroscope v2 storage, under independent profile ingestion/retention limits. Terraform owns only newly requested storage/roles; an existing cluster's Cilium remains externally owned. Hubble network counters join the regional scrape pipeline and have a dedicated Grafana dashboard. See [exact ownership, privilege, HA and qualification contracts](ebpf.md).
+
+A Git-owned service catalog supplies stable service identity, ownership, runbooks, optional availability SLOs and application scaffolds. A static configuration studio generates reviewable regional configuration and service definitions locally, without cloud credentials or deployment privileges. Catalog/configuration definitions are desired state; live readiness, ownership authority and telemetry completeness are not inferred from their existence.

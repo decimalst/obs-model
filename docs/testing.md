@@ -40,3 +40,11 @@ Do not label the platform production-validated until these tests run on the inte
 10. Restore snapshots/PVCs/object data and restore a region. State the measured RPO/RTO and costs. Cross-region raw replication is absent, so a surviving region cannot magically reconstruct the failed region's history.
 
 Capture manifests, immutable image IDs, timings, query results, queue/drop metrics, and cost/throughput measurements. Record failures as failures. Do not weaken quotas or skip unavailable replicas just to make an acceptance run pass.
+
+## Studio, catalog and eBPF additions
+
+Run `make studio-test service-test profiling-test rules-test dashboard-test`. Studio compiler tests cover both provisioning paths, scope/ownership rejection, unsafe inputs, ZIP CRC/content round trips, and validation of exported contracts by the real Python validators. `make studio-terraform-test` initializes/validates a generated Terraform root with no apply. Catalog tests cover schema failures, duplicate identity, escaping, stale generated content, safe scaffolding, invalid Helm inputs and publish confirmation. The Go starter tests health/accounting and propagated server spans with bounded route labels. Promtool exercises generated multi-window SLO burn, healthy and idle cases. The actual Grafana binary provisions the catalog and RED dashboards and reloads file changes.
+
+`make profiling-test` validates rendered optional native objects, Alloy positive/negative configurations, Hubble scrape configuration, and Pyroscope v2 YAML/metastore flags using its API target. This deliberately does not attach eBPF probes or exercise distributed Pyroscope storage. Live Cilium enforcement, workload endpoint coverage, kernel profile capture, S3/Pod Identity, Raft restore, profile ingestion/query and AZ loss remain the qualification gates in `ebpf.md`. The separate Cilium reference chart is locked and can be rendered/validated without installing it.
+
+For browser acceptance, test the environment/capacity/visibility/review steps, both cluster modes, configuration ZIP, service definition export, private catalog import/search, validation errors and narrow/mobile layout. The static builder must never include actual catalog or environment data. Hosted Pages and notification delivery need separate live checks.

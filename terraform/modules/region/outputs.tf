@@ -10,3 +10,4 @@ output "quota_secret_arn" { value = module.platform_services.platform.quota_secr
 output "vpc_cidr" { value = module.platform_services.platform.vpc_cidr }
 output "role_arns" { value = module.platform_services.platform.role_arns }
 output "required_role_policies" { value = module.platform_services.required_role_policies }
+output "profiling" { value = module.platform_services.platform.profiling }

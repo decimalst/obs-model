@@ -1,0 +1,6 @@
+.env
+*.secret.*
+*.key
+*.pem
+/service
+coverage.out

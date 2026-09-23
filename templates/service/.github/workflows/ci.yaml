@@ -1,0 +1,13 @@
+name: service-checks
+on: [push, pull_request]
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with: {go-version: '1.25.8'}
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: docker build -t local/service:test .

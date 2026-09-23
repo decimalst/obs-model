@@ -1,0 +1,131 @@
+{{- if .Values.profiling.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alloy-profiles
+---
+{{- range .Values.profiling.namespaces }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: olly-profile-discovery
+  namespace: {{ . }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: olly-profile-discovery
+  namespace: {{ . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: olly-profile-discovery
+subjects:
+  - kind: ServiceAccount
+    name: alloy-profiles
+    namespace: {{ $.Release.Namespace }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-profiles
+data:
+  config.alloy: |
+    discovery.kubernetes "local" {
+      role = "pod"
+      namespaces { names = {{ .Values.profiling.namespaces | toJson }} }
+      selectors {
+        role = "pod"
+        field = "spec.nodeName=" + sys.env("NODE_NAME")
+        label = "observability/profile=true"
+      }
+    }
+    discovery.relabel "profiles" {
+      targets = discovery.kubernetes.local.targets
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_observability_service"]
+        regex = "[a-z0-9]([-a-z0-9]*[a-z0-9])?"
+        action = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_observability_service"]
+        target_label = "service_name"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label = "service_namespace"
+      }
+      rule {
+        action = "labelkeep"
+        regex = "(__.*|service_name|service_namespace)"
+      }
+    }
+    pyroscope.ebpf "cpu" {
+      targets = discovery.relabel.profiles.output
+      forward_to = [pyroscope.write.regional.receiver]
+      sample_rate = {{ .Values.profiling.sampleRate }}
+      collect_interval = "{{ .Values.profiling.collectIntervalSeconds }}s"
+      pid_label = false
+      comm = "none"
+    }
+    pyroscope.write "regional" {
+      external_labels = { "cloud_region" = {{ .Values.region | quote }}, "k8s_cluster_name" = {{ .Values.clusterName | quote }} }
+      endpoint {
+        url = "http://pyroscope-distributor:4040"
+        headers = { "X-Scope-OrgID" = "platform" }
+        remote_timeout = "10s"
+        max_backoff_retries = 3
+        max_backoff_period = "15s"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy-profiles
+spec:
+  selector:
+    matchLabels: {app: alloy-profiles}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 1}
+  template:
+    metadata:
+      labels: {app: alloy-profiles}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "12345"
+        checksum/config: {{ dict "profiling" .Values.profiling "region" .Values.region "cluster" .Values.clusterName | toJson | sha256sum }}
+    spec:
+      serviceAccountName: alloy-profiles
+      hostPID: true
+      nodeSelector: {kubernetes.io/os: linux, kubernetes.io/arch: amd64}
+      containers:
+        - name: alloy
+          image: {{ .Values.profiling.image }}
+          args: [run, /etc/alloy/config.alloy, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/tmp/alloy]
+          securityContext: {privileged: true, runAsUser: 0}
+          env:
+            - name: NODE_NAME
+              valueFrom: {fieldRef: {fieldPath: spec.nodeName}}
+          ports: [{name: metrics, containerPort: 12345}]
+          readinessProbe: {httpGet: {path: /-/ready, port: metrics}}
+          resources:
+            {{- toYaml .Values.profiling.resources | nindent 12 }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/alloy, readOnly: true}
+            - {name: tracing, mountPath: /sys/kernel/tracing, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap: {name: alloy-profiles}
+        - name: tracing
+          hostPath: {path: /sys/kernel/tracing, type: Directory}
+        - name: tmp
+          emptyDir: {sizeLimit: 2Gi}
+{{- end }}

@@ -26,6 +26,10 @@ class Automation(unittest.TestCase):
             "cluster_name": "olly-us-west-2",
             "availability_zones": ["us-west-2a", "us-west-2b", "us-west-2c"],
             "quota_redis_host": "quota.us-west-2",
+            "secret_source": "existing",
+            "role_arns": {
+                name: "arn:aws:iam::123456789012:role/" + name for name in ("mimir", "tempo")
+            },
             "vpc_cidr": "10.41.0.0/16",
             "buckets": {
                 k: "west-" + k

@@ -9,10 +9,12 @@ export GO
 setup:
 	python3 -m venv .venv
 	$(PYTHON) -m pip install -r requirements-dev.txt
+	npm ci --ignore-scripts
 deps:
 	helm dependency build charts/operators
 	helm dependency build charts/platform
 	helm dependency build charts/flink-operator
+	helm dependency build integrations/cilium
 render:
 	$(PYTHON) scripts/render.py
 lint:
@@ -30,7 +32,7 @@ test: render
 	cd services/log-quota && $(GO) test -race ./...
 schemas: render
 	$(KUBECONFORM) -strict -summary -kubernetes-version 1.35.0 -ignore-missing-schemas build/platform.yaml build/operators.yaml build/debug-grants.yaml build/flink-operator.yaml
-check: lint test schemas
+check: studio-test lint test schemas service-test
 terraform-init:
 	terraform -chdir=terraform/modules/platform-services init -backend=false
 	terraform -chdir=terraform/live/existing-cluster init -backend=false
@@ -58,8 +60,8 @@ collector-test:
 	$(PYTHON) scripts/collector_test.py
 .PHONY: rules-test
 rules-test:
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml /rules/red.yaml
-	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml /tests/red.test.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 check rules /rules/platform.yaml /rules/red.yaml /rules/catalog.yaml /tests/catalog.fixture.yaml
+	docker run --rm --network none --entrypoint /bin/promtool -v $(CURDIR)/charts/platform/files/rules:/rules:ro -v $(CURDIR)/tests/rules:/tests:ro prom/prometheus:v3.5.0 test rules /tests/platform.test.yaml /tests/red.test.yaml /tests/catalog.test.yaml
 
 .PHONY: sharding-test
 sharding-test:
@@ -76,3 +78,24 @@ red-test:
 .PHONY: dashboard-test
 dashboard-test:
 	$(PYTHON) scripts/dashboard_test.py
+
+NODE ?= $(if $(wildcard .cache/tools/node/bin/node),$(CURDIR)/.cache/tools/node/bin/node,node)
+.PHONY: catalog studio-test profiling-test service-test
+catalog:
+	$(PYTHON) scripts/service_catalog.py compile
+studio-test:
+	$(NODE) --check site/app.mjs
+	$(NODE) node_modules/prettier/bin/prettier.cjs --check site scripts/*.mjs tests/*.mjs
+	$(NODE) --test tests/studio.test.mjs
+	$(PYTHON) -m unittest discover -s tests -p test_catalog.py -v
+profiling-test:
+	$(PYTHON) scripts/profiling_test.py
+service-test:
+	cd templates/service && $(GO) test -race ./...
+	cd templates/service && $(GO) vet ./...
+
+.PHONY: studio-terraform-test
+studio-terraform-test: studio-test
+	cp terraform/live/us-east-1/.terraform.lock.hcl build/studio-new/.terraform.lock.hcl
+	terraform -chdir=build/studio-new init -backend=false -lockfile=readonly
+	terraform -chdir=build/studio-new validate

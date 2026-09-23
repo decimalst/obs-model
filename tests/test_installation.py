@@ -110,9 +110,17 @@ class Inventory:
                         },
                         {
                             "metadata": {"name": "aws-node"},
+                            "status": {"desiredNumberScheduled": 6, "numberReady": 6},
                             "spec": {
                                 "template": {
-                                    "spec": {"containers": [{"name": "aws-eks-nodeagent"}]}
+                                    "spec": {
+                                        "containers": [
+                                            {
+                                                "name": "aws-eks-nodeagent",
+                                                "args": ["--enable-network-policy=true"],
+                                            }
+                                        ]
+                                    }
                                 }
                             },
                         },

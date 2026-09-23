@@ -36,6 +36,8 @@ def validate_platform(p):
     p = dict(p)
     allowed = {
         "tuning",
+        "profiling",
+        "network_policy_provider",
         "region",
         "cluster_name",
         "cluster_arn",
@@ -78,7 +80,25 @@ def validate_platform(p):
             "Supply availability_zones: three distinct standard AZs in this region; "
             "no a/b/c guessing"
         )
-    for key in BUCKETS:
+    p.setdefault("network_policy_provider", "aws")
+    if p["network_policy_provider"] not in ("aws", "cilium"):
+        raise ValueError("network_policy_provider must be aws or cilium")
+    profiling = p.get("profiling", {"enabled": False})
+    if (
+        not isinstance(profiling, dict)
+        or set(profiling) != {"enabled"}
+        or type(profiling["enabled"]) is not bool
+    ):
+        raise ValueError(
+            "profiling must contain only a boolean enabled; use tuning for sample rates"
+        )
+    p["profiling"] = profiling
+    if (
+        p.get("tuning", {}).get("hubble", {}).get("enabled", False)
+        and p["network_policy_provider"] != "cilium"
+    ):
+        raise ValueError("Hubble requires an explicitly reused Cilium installation")
+    for key in BUCKETS + (("pyroscope",) if profiling["enabled"] else ()):
         name = p.get("buckets", {}).get(key, "")
         if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", name):
             raise ValueError(f"Set the existing regional bucket for {key}")
@@ -97,7 +117,7 @@ def validate_platform(p):
                 p.get(key, ""),
             ):
                 raise ValueError(f"{key} must be a Secrets Manager ARN in {region}")
-    for key in ("mimir", "tempo"):
+    for key in ("mimir", "tempo") + (("pyroscope",) if profiling["enabled"] else ()):
         if not re.fullmatch(r"arn:aws:iam::\d{12}:role/.+", p.get("role_arns", {}).get(key, "")):
             raise ValueError(f"Provide the existing or newly created {key} Pod Identity role ARN")
     p.setdefault("storage_class", "gp3-encrypted")

@@ -65,3 +65,13 @@ Rules in `charts/platform/files/rules/platform.yaml` are mounted into every Mimi
 For PR-based configuration sync and drift repair, see [GitOps](gitops.md). For every component's scaling control and stateful constraints, see [capacity operations](scaling.md). Quota-policy changes intentionally backpressure while old policies drain; do not reset active keys.
 
 ClickHouse now defaults to two shards × three replicas. Use the [sharding runbook](clickhouse-sharding.md) for the write-pause expansion procedure and the mandatory pre-0.3 schema migration. A post-install/upgrade Helm hook establishes the schema during GitOps reconciliation.
+
+## Service onboarding, profiling and studio publication
+
+Service registration/creation follows [the catalog runbook](service-catalog.md): reviewed definition, `make catalog`, generated content committed together, application identity and namespace onboarding, then end-to-end telemetry verification. Publish a scaffold only after committing it as its own reviewed repository. Owner labels are not alert-delivery configuration; prove the notification path separately.
+
+Enable profiles with a separately reviewed Terraform plan (`enable_profiling=true`) or externally provisioned regional bucket/role/association, then the updated platform contract. Follow [eBPF qualification](ebpf.md), confirm namespace/RBAC and kernel prerequisites, and admit only labeled workloads. Cilium remains under its original networking owner; changing the observability release never migrates the CNI.
+
+Before disabling profiles, remove workload opt-in labels, drain exporters, preserve backend query access for the retention period and rehearse metastore/object-store restore. Do not flip Terraform storage off as a cleanup shortcut: buckets deliberately reject deletion while nonempty and PVCs remain retained. Do not change Pyroscope storage architecture, metastore membership or role ownership through a casual Helm rollback. Plan upgrades and any removal as a separate stateful migration.
+
+Publish the configuration studio only with the allowlisted Pages artifact and reviewed workflow environment. No catalog/environment data belongs in the public bundle. The [studio runbook](configuration-studio.md) covers offline generation, GitHub setup and the explicit publication step.

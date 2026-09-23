@@ -105,6 +105,69 @@ def validate_storage_class(sc):
     )
 
 
+def validate_network_provider(p, daemonsets, kube):
+    cni = next((d for d in daemonsets if d["metadata"]["name"] == "aws-node"), {})
+    containers = cni.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+    agents = [
+        c for c in containers if c["name"] in ("aws-eks-nodeagent", "aws-network-policy-agent")
+    ]
+    flags = []
+    for agent in agents:
+        options = agent.get("args", [])
+        enabled = None
+        for i, option in enumerate(options):
+            if option.startswith("--enable-network-policy="):
+                enabled = option.split("=", 1)[1]
+            elif option == "--enable-network-policy":
+                enabled = (
+                    options[i + 1]
+                    if i + 1 < len(options) and options[i + 1] in ("true", "false")
+                    else "true"
+                )
+        flags.append(enabled)
+    if p.get("network_policy_provider", "aws") == "aws":
+        require(
+            flags and all(flag == "true" for flag in flags),
+            "AWS VPC CNI NetworkPolicy agent must explicitly enable network policy",
+        )
+        status = cni.get("status", {})
+        require(
+            status.get("desiredNumberScheduled", 0) > 0
+            and status.get("numberReady") == status.get("desiredNumberScheduled"),
+            "AWS VPC CNI must be ready on every eligible node",
+        )
+        return
+    require(
+        all(flag == "false" for flag in flags),
+        "Cilium requires explicitly disabled AWS network-policy enforcement; "
+        "the installer performs no automatic CNI migration",
+    )
+    cilium = next((d for d in daemonsets if d["metadata"]["name"] == "cilium"), {})
+    status = cilium.get("status", {})
+    require(
+        status.get("desiredNumberScheduled", 0) > 0
+        and status.get("numberReady") == status.get("desiredNumberScheduled"),
+        "Existing Cilium must be ready on every eligible node",
+    )
+    config = kube("configmap", "cilium-config", "-n", "kube-system")["data"]
+    require(
+        config.get("enable-policy") in ("default", "always"),
+        "Cilium NetworkPolicy enforcement must be enabled",
+    )
+    if p.get("tuning", {}).get("hubble", {}).get("enabled"):
+        require(
+            config.get("enable-hubble") == "true"
+            and config.get("hubble-metrics-server") == ":9965",
+            "Enable Hubble metrics on :9965 in the externally owned Cilium release",
+        )
+    if p.get("profiling", {}).get("enabled"):
+        # Host kernel and admission readiness remain explicit deployment qualification gates.
+        require(
+            p.get("tuning", {}).get("profiling", {}).get("namespaces", ["applications"]),
+            "Select profile namespaces",
+        )
+
+
 def preflight(p, reader=read):
     def aws(service, operation, *args):
         return reader(
@@ -159,13 +222,7 @@ def preflight(p, reader=read):
         and status.get("numberReady") == status.get("desiredNumberScheduled"),
         "Install/repair the EKS Pod Identity agent before deployment",
     )
-    cni = next((d for d in ds if d["metadata"]["name"] == "aws-node"), {})
-    containers = cni.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
-    require(
-        any(c["name"] == "aws-eks-nodeagent" for c in containers),
-        "AWS VPC CNI NetworkPolicy agent is required by this installation profile; "
-        "enable it with the cluster owner before installing",
-    )
+    validate_network_provider(p, ds, kube)
     classes = {s["metadata"]["name"]: s for s in kube("storageclasses")["items"]}
     sc = classes.get(p["storage_class"])
     if p["create_storage_class"]:
@@ -308,7 +365,7 @@ def preflight(p, reader=read):
             "Existing metrics-server API must be Available for HPA",
         )
     # Capacity management may be Cluster Autoscaler, Karpenter, or externally managed.
-    for key in BUCKETS:
+    for key in BUCKETS + (("pyroscope",) if p.get("profiling", {}).get("enabled") else ()):
         location = (
             aws("s3api", "get-bucket-location", "--bucket", p["buckets"][key]).get(
                 "LocationConstraint"
@@ -322,7 +379,9 @@ def preflight(p, reader=read):
     associations = aws(
         "eks", "list-pod-identity-associations", "--cluster-name", p["cluster_name"]
     )["associations"]
-    for service in ("mimir", "tempo"):
+    for service in ("mimir", "tempo") + (
+        ("pyroscope",) if p.get("profiling", {}).get("enabled") else ()
+    ):
         found = next(
             (
                 a

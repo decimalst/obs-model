@@ -8,14 +8,15 @@ import re
 import yaml
 
 try:
-    from .platform_config import OPERATORS, load_platform
+    from .platform_config import OPERATORS, load_platform, validate_platform
     from .tuning import load_tuning, merge, validate_tuning
 except ImportError:
-    from platform_config import OPERATORS, load_platform
+    from platform_config import OPERATORS, load_platform, validate_platform
     from tuning import load_tuning, merge, validate_tuning
 
 
 def values(platform, quota_image):
+    platform = validate_platform(platform)
     region = platform["region"]
     if not re.fullmatch(r".+@sha256:[a-f0-9]{64}", quota_image):
         raise ValueError("Use the published log-quota image digest, not a mutable tag")
@@ -83,6 +84,29 @@ def values(platform, quota_image):
         },
     }
 
+    if platform.get("profiling", {}).get("enabled", False):
+        generated["profiling"] = {"enabled": True}
+        generated["pyroscope"] = {
+            "pyroscope": {
+                "structuredConfig": {
+                    "storage": {
+                        "s3": {
+                            "bucket_name": buckets["pyroscope"],
+                            "endpoint": f"s3.{region}.amazonaws.com",
+                            "region": region,
+                        }
+                    }
+                },
+                "components": {
+                    name: {
+                        "persistence": {
+                            "storageClassName": platform.get("storage_class", "gp3-encrypted")
+                        }
+                    }
+                    for name in ("metastore", "segment-writer")
+                },
+            }
+        }
     return merge(generated, validate_tuning(platform.get("tuning", {})))
 
 

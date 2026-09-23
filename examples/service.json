@@ -1,0 +1,17 @@
+{
+  "apiVersion": "observability/v1",
+  "name": "checkout",
+  "namespace": "applications",
+  "owner": "commerce",
+  "description": "Example checkout HTTP service. Replace with reviewed service ownership.",
+  "repository": "https://github.com/example/checkout",
+  "runbook": "https://example.com/runbooks/checkout",
+  "lifecycle": "experimental",
+  "profiling": false,
+  "dependencies": [],
+  "slo": {
+    "enabled": false,
+    "target": 99.9,
+    "source": "application"
+  }
+}

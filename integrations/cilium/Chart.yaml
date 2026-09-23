@@ -1,0 +1,8 @@
+apiVersion: v2
+name: cluster-network-reference
+version: 0.1.0
+type: application
+dependencies:
+  - name: cilium
+    version: 1.20.2
+    repository: https://helm.cilium.io/

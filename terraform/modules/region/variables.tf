@@ -69,3 +69,9 @@ variable "quota_redis_auth_token" {
     error_message = "Use a generated 32-128 character alphanumeric quota store password."
   }
 }
+
+variable "enable_profiling" {
+  description = "Create regional profile storage and its Pod Identity association. Disabling after use requires a retention/migration review."
+  type        = bool
+  default     = false
+}

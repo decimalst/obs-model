@@ -39,7 +39,7 @@ The [reference diagram](docs/reference/architecture.png) is preserved as input e
 
 ## Validate locally
 
-Prerequisites: Python 3.11+, Go 1.25+, Terraform 1.10+, Helm 3.16+ (tested with Helm 4.2.3), Docker, OpenSSL, and kubeconform 0.7.0. Install kubeconform with `go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0`.
+Prerequisites: Python 3.11+, Go 1.25+, Node 24 with npm, Terraform 1.10+, Helm 3.16+ (tested with Helm 4.2.3), Docker, OpenSSL, and kubeconform 0.7.0. Install kubeconform with `go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0`.
 
 ```sh
 make setup deps
@@ -48,6 +48,7 @@ make terraform-init terraform-test
 make runtime-test
 make image integration-test
 make collector-test rules-test sharding-test consumer-test
+make red-test dashboard-test profiling-test studio-terraform-test
 ```
 
 Checks do not apply Terraform or create AWS resources. The integration test creates and removes only containers and a network bearing its unique test identifier. Its one-broker/one-database topology verifies the data path, not three-AZ failover.
@@ -111,3 +112,13 @@ Kafka logs start with **36 partitions and 3–12 consumers**, scaled by queue la
 ## Service RED and remaining platform work
 
 The **Service RED — observed traffic** dashboard shows request rate, error ratio and p50/p95/p99 latency by region, cluster and service. Node agents derive bounded metrics before trace sampling and export them over Arrow to the metrics gateway. Server spans count by default; raw span names/URLs/IDs do not become labels. See [the RED guide](docs/service-red.md), [SDK onboarding fragment](examples/sdk-identity.yaml), and [remaining platform gaps](docs/platform-gaps.md). Run `make red-test rules-test dashboard-test` to verify the pipeline, queries and Grafana provisioning. Full coverage requires application instrumentation and spans reaching the agent; head sampling and telemetry loss affect the result.
+
+## Configuration studio, service catalog and eBPF
+
+Open the [configuration studio](site/index.html) through a local HTTP server, or publish its static allowlist with the manual GitHub Pages workflow. Select new/existing EKS, set budgets and optional visibility, inspect actual generated files, and download a configuration bundle. Nothing applies or publishes automatically. See [studio setup and Pages publication](docs/configuration-studio.md).
+
+Register applications in the [Git-owned service catalog](docs/service-catalog.md), or generate a Go service with telemetry, tests and an application chart. Grafana receives the service directory and optional availability burn alerts through the same GitOps flow. Repository creation is a separate explicit publish operation; the public site never carries private catalog contents or GitHub credentials.
+
+[Network visibility and CPU profiling](docs/ebpf.md) are separate opt-ins: externally managed Cilium Hubble supplies network metrics/UI, while labeled Alloy eBPF collectors send CPU profiles to regional Pyroscope storage. Managed AWS installs can provision its bucket and Pod Identity role. Privileged kernel collection, CNI migrations, distributed profile ingestion and AZ/restore behavior still require live environment qualification.
+
+Run `make studio-test service-test profiling-test` for these additions, alongside the existing required checks.

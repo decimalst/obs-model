@@ -1,4 +1,5 @@
 module "platform_services" {
+  enable_profiling          = var.enable_profiling
   source                    = "../platform-services"
   name                      = var.name
   region                    = var.region

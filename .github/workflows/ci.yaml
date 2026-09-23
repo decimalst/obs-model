@@ -33,6 +33,8 @@ jobs:
       - uses: azure/setup-kubectl@c0c8b32d33a5244f1e5947304550403b63930415 # v4
         with:
           version: v1.35.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with: {node-version: '24.19.0'}
       - run: make setup deps
       - run: go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0
       - run: make check GO=go KUBECONFORM=kubeconform
@@ -41,7 +43,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: .venv/bin/python scripts/check_shard_changes.py --base-ref "$BASE_SHA"
-      - run: make terraform-init terraform-test
+      - run: make terraform-init terraform-test studio-terraform-test
       - run: make runtime-test GO=go
-      - run: make image integration-test collector-test rules-test sharding-test consumer-test red-test dashboard-test
+      - run: make image integration-test collector-test rules-test sharding-test consumer-test red-test dashboard-test profiling-test
       - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 -shellcheck=

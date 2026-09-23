@@ -37,6 +37,18 @@ ClickHouse now defaults to **two shards with three replicas each**, with configu
 
 Kafka consumers now scale from committed-offset lag through KEDA, with 36 partitions and a separately configurable ceiling. CPU-only scaling could miss an I/O-bound backlog. Event-ID keys avoid concentrating a single service on one partition. Scaling is bounded by partitions and downstream capacity; it cannot parallelize an old hot partition or repair an unavailable ClickHouse shard. KEDA and CPU HPA ownership are mutually exclusive, and database maintenance pauses the scaler. See [consumer operations](kafka-consumers.md).
 
+## Service experience and eBPF review (0.5)
+
+| Finding | Change / evidence | Remaining boundary |
+|---|---|---|
+| An installed AWS policy sidecar does not prove enforcement is enabled | Read-only preflight requires its actual enable flag and a ready DaemonSet; Cilium reuse rejects concurrent AWS enforcement and checks Cilium policy/Hubble settings | CNI chaining and policy migration remain owned by the networking team; no automatic CNI replacement |
+| A profiling configuration can parse while using retention controls from an older architecture | Use Pyroscope v2 `retention_period`, check native configuration/API startup and pin the chart | Actual cleanup, S3 access and quorum recovery require live qualification |
+| Required AZ anti-affinity on every profiling worker would prevent scaling past three pods | Reserve strict anti-affinity for the fixed three-member metastore; use AZ topology spread for scalable workers | Reviewed replica changes still require capacity and failover testing |
+| Namespace and workload selection can be mistaken for a security boundary around privileged profiling | Namespace-scoped discovery, explicit workload labels and bounded frequency/retries; opt-in installation | Root/host-PID agent can observe the host; selection is not hostile-tenant isolation; use dedicated nodes where required |
+| Profile limits could be mistaken for the shared log admission budget | Document per-distributor ingress limits and label/profile bounds; omit unsupported v1 series-limit settings | No shared per-service profile quota or proven global v2 series ceiling is claimed |
+| Static Pages publication could disclose private catalogs or carry a privileged GitHub token | Build a fixed static file allowlist, keep imports local, and require a separate reviewed CLI publication step | Authentication, team authorization and multi-user approval workflows are separate platform work |
+| A displayed SLO could imply alert delivery is configured | Generate behavior-tested burn-rate rules only for opted-in services and distinguish direct application metrics from observed spans | Owners must configure/test alert routes and instrument the declared metric contract |
+
 ## Pinned implementation references
 
 - [Arrow receiver configuration, v0.148.0](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/receiver/otelarrowreceiver/config.go) and [Arrow exporter queue/protocol behavior](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.148.0/exporter/otelarrowexporter/README.md).

@@ -29,16 +29,16 @@ variable "additional_client_security_group_ids" {
   }
 }
 variable "existing_role_arns" {
-  description = "Optional existing Pod Identity roles for mimir, tempo, and flink. Their trust and policies remain externally managed."
+  description = "Optional existing Pod Identity roles for mimir, tempo, flink, and optional pyroscope. Their trust and policies remain externally managed."
   type        = map(string)
   default     = {}
   validation {
-    condition     = var.manage_pod_identity_associations || length(var.existing_role_arns) == 3
+    condition     = var.manage_pod_identity_associations || alltrue([for key in concat(["mimir", "tempo", "flink"], var.enable_profiling ? ["pyroscope"] : []) : contains(keys(var.existing_role_arns), key)])
     error_message = "Externally managed associations require all three existing workload role ARNs."
   }
   validation {
-    condition     = alltrue([for k, v in var.existing_role_arns : contains(["mimir", "tempo", "flink"], k) && can(regex("^arn:aws:iam::[0-9]{12}:role/.+", v))])
-    error_message = "Only mimir, tempo, and flink IAM role ARNs are accepted."
+    condition     = alltrue([for k, v in var.existing_role_arns : contains(["mimir", "tempo", "flink", "pyroscope"], k) && can(regex("^arn:aws:iam::[0-9]{12}:role/.+", v))])
+    error_message = "Only mimir, tempo, flink, and optional pyroscope IAM role ARNs are accepted."
   }
 }
 variable "manage_pod_identity_associations" {
@@ -64,4 +64,10 @@ variable "tags" {
     condition     = alltrue([for k in ["Owner", "Environment", "CostCenter"] : try(length(trimspace(var.tags[k])) > 0, false)])
     error_message = "Owner, Environment, and CostCenter tags are required."
   }
+}
+
+variable "enable_profiling" {
+  description = "Create regional profile storage and its Pod Identity association. Disabling after use requires a retention/migration review."
+  type        = bool
+  default     = false
 }

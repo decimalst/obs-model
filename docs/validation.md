@@ -48,3 +48,28 @@ No AWS infrastructure has been applied and no repository or image has been publi
 The remaining acceptance gates include KEDA/HPA scaling from induced lag, scaler fallback and maintenance pause; Helm schema-hook execution and operator-driven shard expansion; live Flux reconciliation/drift correction, Grafana dashboard/query rendering and Mimir rule-file reload; actual EKS deployment and operator reconciliation; IAM/Pod Identity and network policies; OTLP metrics/traces through to Grafana; live autoscaling and blue-green promotion/rollback; scrape assignment behavior during allocator changes; Valkey and three-AZ quorum failure; backup restore; regional recovery; and measured cost/throughput. See [testing.md](testing.md) for procedures. No measured production capacity, RPO, RTO, or dollar cost is claimed.
 
 Flink is an optional operator/deployment integration with savepoint and regional checkpoint configuration. No arbitrary application job or connector is supplied; its runtime behavior still requires a real job and job-specific tests. The included ClickHouse materialized view implements basic derived log aggregates without Flink.
+
+## 2026-09-23: service experience and eBPF integration (0.5)
+
+Added independently opted-in Hubble and CPU profiling, regional profile storage/Pod Identity, v2 retention and bounded profile settings, a Git-owned service catalog/SLO compiler, a Go service scaffold with explicit publication, and the static configuration studio/Pages artifact workflow. Network ownership remains external; preflight now checks the actual AWS network-policy flag instead of treating the node-agent container's presence as proof of enforcement.
+
+Executed local checks:
+
+| Check | Result |
+|---|---|
+| `make check` | Pass: 72 Python tests, 6 Node tests, Go race tests/vet for quota and scaffold, strict Helm lint, Terraform formatting, Python/JavaScript formatting and shell syntax |
+| Default native Kubernetes schemas | Pass: 386 rendered resources; 328 valid, 0 invalid, 0 errors, 58 skipped; custom-resource checks remain separate |
+| `make terraform-test` | Pass: 19 mocked tests and module/root validation, including optional regional profile storage and external role ownership |
+| `make studio-terraform-test` | Pass: generated new-cluster Terraform initialized with the committed provider lock and validated; existing-cluster output also passes the Python platform contract |
+| `make runtime-test` | Pass: all 3 Vector and 5 collector configurations, Mimir's 9 targets, Tempo, and quota tests against live Valkey |
+| `make collector-test red-test` | Pass: Arrow trace affinity/cardinality and pre-tail RED behavior, including two independent writers and 0% healthy trace retention |
+| `make rules-test` | Pass: existing rules plus 6 generated catalog rules; healthy, idle, zero-error and sustained burn-rate cases |
+| `make dashboard-test` | Pass: actual Grafana 12.3.1 loads the catalog and RED dashboard and reloads edited files |
+| `make profiling-test` | Pass: native Alloy validation and malformed-config rejection, Pyroscope API startup with rendered configuration/metastore flags, Hubble collector syntax; optional platform plus Cilium reference total 263 rendered resources, 250 valid, 13 skipped, 0 errors |
+| Cilium reference chart | Pass: pinned dependencies, rendered chaining/Hubble configuration and 40 native resources valid; no installation performed |
+| Workflow syntax | Pass: actionlint; hosted runs have not occurred |
+| Static studio | Pass: both deployment previews, service form and local catalog import/filter in the in-app browser; ZIP contents/CRC and Unicode round trip tested independently; browser download events did not report completion, so a successful browser file save is not asserted |
+
+The final studio-only change preserving optional imported database/cluster settings reran its compiler, export, catalog and generated-Terraform checks. Kafka/ClickHouse sharding and consumer behavior were not changed or rerun in this pass; their earlier executed evidence remains above.
+
+No cloud apply, CNI change, application publication or GitHub Pages deployment was performed. A GitHub remote is not configured in this checkout. Profile parser/API startup validation is not eBPF capture, Pod Identity, retention deletion, Raft failover or distributed-storage qualification; the live gates in `ebpf.md` remain required. No live profile datasource query, mobile browser acceptance, application image deployment or hosted Pages download is claimed.

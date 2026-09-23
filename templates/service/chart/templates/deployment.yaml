@@ -1,0 +1,68 @@
+{{- if ne .Release.Namespace "__NAMESPACE__" }}
+{{- fail "Deploy into the namespace declared in service.json" }}
+{{- end }}
+{{- if not (regexMatch "^.+@sha256:[a-f0-9]{64}$" .Values.image) }}
+{{- fail "Build, publish and set image to an immutable repository@sha256:digest" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: __SERVICE_NAME__
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels: {app: __SERVICE_NAME__}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
+  template:
+    metadata:
+      labels:
+        app: __SERVICE_NAME__
+        observability/service: __SERVICE_NAME__
+        observability/profile: {{ .Values.profiling | quote }}
+      annotations: {prometheus.io/scrape: 'true', prometheus.io/port: '8080'}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, seccompProfile: {type: RuntimeDefault}}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: {matchLabels: {app: __SERVICE_NAME__}}
+      containers:
+        - name: app
+          image: {{ .Values.image }}
+          ports: [{name: http, containerPort: 8080}]
+          securityContext: {readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '1', memory: 256Mi}
+          readinessProbe: {httpGet: {path: /healthz, port: http}}
+          livenessProbe: {httpGet: {path: /healthz, port: http}}
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: __SERVICE_NAME__
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - name: POD_UID
+              valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: service.namespace=$(POD_NAMESPACE),service.instance.id=$(POD_UID),k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.uid=$(POD_UID)
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-agent.observability.svc:4318
+---
+apiVersion: v1
+kind: Service
+metadata: {name: __SERVICE_NAME__}
+spec:
+  selector: {app: __SERVICE_NAME__}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: __SERVICE_NAME__}
+spec:
+  minAvailable: 2
+  selector: {matchLabels: {app: __SERVICE_NAME__}}

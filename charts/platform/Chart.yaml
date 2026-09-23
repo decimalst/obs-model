@@ -1,9 +1,9 @@
 apiVersion: v2
 name: observability-platform
-version: 0.4.0
+version: 0.5.0
 description: Region-local logs, metrics, traces, and Grafana with bounded debug grants.
 type: application
-appVersion: "0.4.0"
+appVersion: "0.5.0"
 dependencies:
   - name: mimir-distributed
     alias: mimir
@@ -16,3 +16,7 @@ dependencies:
   - name: grafana
     version: 10.5.15
     repository: https://grafana.github.io/helm-charts
+  - name: pyroscope
+    version: 2.3.1
+    repository: https://grafana.github.io/helm-charts
+    condition: profiling.enabled

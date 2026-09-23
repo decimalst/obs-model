@@ -1,0 +1,65 @@
+groups:
+- name: service-catalog-slos
+  rules:
+  - record: service:slo_error_ratio:rate5m
+    expr: ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications",status_class="5xx"}[5m])))
+      or (0 * (sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[5m])))))
+      / ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[5m])))
+      > 0)
+    labels: &id001
+      service_name: checkout
+      service_namespace: applications
+      owner: commerce
+      slo_source: application
+  - record: service:slo_error_ratio:rate30m
+    expr: ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications",status_class="5xx"}[30m])))
+      or (0 * (sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[30m])))))
+      / ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[30m])))
+      > 0)
+    labels: *id001
+  - record: service:slo_error_ratio:rate1h
+    expr: ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications",status_class="5xx"}[1h])))
+      or (0 * (sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[1h])))))
+      / ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[1h])))
+      > 0)
+    labels: *id001
+  - record: service:slo_error_ratio:rate6h
+    expr: ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications",status_class="5xx"}[6h])))
+      or (0 * (sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[6h])))))
+      / ((sum by (cloud_region,k8s_cluster_name) (rate(service_requests_total{service_name="checkout",service_namespace="applications"}[6h])))
+      > 0)
+    labels: *id001
+  - alert: ServiceErrorBudgetBurn
+    expr: (service:slo_error_ratio:rate1h{service_name="checkout",service_namespace="applications",slo_source="application"}
+      > 0.0144) and (service:slo_error_ratio:rate5m{service_name="checkout",service_namespace="applications",slo_source="application"}
+      > 0.0144)
+    for: 2m
+    labels:
+      service_name: checkout
+      service_namespace: applications
+      owner: commerce
+      slo_source: application
+      severity: critical
+    annotations:
+      summary: applications/checkout exceeds its 30-day availability error budget
+        burn threshold
+      runbook_url: https://example.com/runbooks/checkout
+      description: Observed telemetry only; verify coverage and alert delivery before
+        using this SLO operationally.
+  - alert: ServiceErrorBudgetBurn
+    expr: (service:slo_error_ratio:rate6h{service_name="checkout",service_namespace="applications",slo_source="application"}
+      > 0.006) and (service:slo_error_ratio:rate30m{service_name="checkout",service_namespace="applications",slo_source="application"}
+      > 0.006)
+    for: 2m
+    labels:
+      service_name: checkout
+      service_namespace: applications
+      owner: commerce
+      slo_source: application
+      severity: warning
+    annotations:
+      summary: applications/checkout exceeds its 30-day availability error budget
+        burn threshold
+      runbook_url: https://example.com/runbooks/checkout
+      description: Observed telemetry only; verify coverage and alert delivery before
+        using this SLO operationally.

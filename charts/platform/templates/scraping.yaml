@@ -101,6 +101,26 @@ spec:
                   target_label: namespace
               metric_relabel_configs:
                 {{- toYaml .Values.mimir.mimir.structuredConfig.limits.metric_relabel_configs | nindent 16 }}
+            {{- if .Values.hubble.enabled }}
+            - job_name: hubble
+              scrape_interval: {{ .Values.collectors.scrapeInterval }}
+              scrape_timeout: {{ .Values.collectors.scrapeTimeout }}
+              sample_limit: {{ .Values.hubble.sampleLimit }}
+              label_limit: {{ .Values.mimir.mimir.structuredConfig.limits.max_label_names_per_series }}
+              label_value_length_limit: {{ .Values.mimir.mimir.structuredConfig.limits.max_label_value_length }}
+              kubernetes_sd_configs:
+                - role: node
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_node_address_InternalIP]
+                  regex: '(.+)'
+                  replacement: '$$1:9965'
+                  target_label: __address__
+              metric_relabel_configs:
+                - source_labels: [__name__]
+                  regex: 'hubble_(drop_total|tcp_flags_total|icmp_total|flows_processed_total)'
+                  action: keep
+                {{- toYaml .Values.mimir.mimir.structuredConfig.limits.metric_relabel_configs | nindent 16 }}
+            {{- end }}
     processors:
       memory_limiter:
         check_interval: 1s

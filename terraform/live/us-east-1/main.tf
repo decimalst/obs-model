@@ -16,7 +16,12 @@ variable "existing_role_arns" {
   type    = map(string)
   default = {}
 }
+variable "enable_profiling" {
+  type    = bool
+  default = false
+}
 module "region" {
+  enable_profiling       = var.enable_profiling
   source                 = "../../modules/region"
   existing_role_arns     = var.existing_role_arns
   name                   = "olly-us-east-1"

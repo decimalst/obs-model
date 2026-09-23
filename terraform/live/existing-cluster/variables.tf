@@ -31,3 +31,9 @@ variable "quota_redis_auth_token" {
   sensitive = true
 }
 variable "tags" { type = map(string) }
+
+variable "enable_profiling" {
+  description = "Create regional profile storage and its Pod Identity association. Disabling after use requires a retention/migration review."
+  type        = bool
+  default     = false
+}

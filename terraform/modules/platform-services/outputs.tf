@@ -1,5 +1,6 @@
 output "platform" {
   value = {
+    profiling             = { enabled = var.enable_profiling }
     cluster_name          = var.cluster_name
     cluster_arn           = var.cluster_arn
     region                = var.region

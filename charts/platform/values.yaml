@@ -241,6 +241,8 @@ mimir:
         items:
         - key: platform.yaml
           path: platform/platform.yaml
+        - key: catalog.yaml
+          path: platform/catalog.yaml
         - key: red.yaml
           path: platform/red.yaml
     extraVolumeMounts:
@@ -333,6 +335,14 @@ grafana:
       secretKeyRef:
         name: clickhouse-auth
         key: password
+  rbac: {namespaced: true}
+  sidecar:
+    datasources:
+      enabled: true
+      label: olly_datasource
+      labelValue: 'true'
+      resource: configmap
+      searchNamespace: observability
   datasources:
     datasources.yaml:
       apiVersion: 1
@@ -476,3 +486,226 @@ clickhouse:
   insertQuorumTimeoutMs: 10000
   schemaJob: true
   pauseWrites: false
+
+# Cilium remains owned by the cluster's networking release.
+hubble:
+  enabled: false
+  metricsPort: 9965
+  sampleLimit: 5000
+profiling:
+  enabled: false
+  image: grafana/alloy:v1.19.2
+  namespaces: [applications]
+  sampleRate: 19
+  collectIntervalSeconds: 30
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: '1', memory: 1Gi}
+pyroscope:
+  alloy:
+    enabled: false
+  agent:
+    enabled: false
+  minio:
+    enabled: false
+  architecture:
+    storage:
+      v1: false
+      v2: true
+    microservices:
+      enabled: true
+  pyroscope:
+    fullnameOverride: pyroscope
+    image:
+      repository: grafana/pyroscope
+      tag: 2.3.1
+    serviceAccount:
+      create: true
+      name: pyroscope
+    extraArgs:
+      log.level: info
+    podAnnotations:
+      prometheus.io/scrape: 'true'
+      prometheus.io/port: '4040'
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+    nodeSelector:
+      kubernetes.io/os: linux
+      kubernetes.io/arch: amd64
+    persistence:
+      enabled: false
+    structuredConfig:
+      multitenancy_enabled: true
+      analytics: {reporting_enabled: false}
+      storage:
+        backend: s3
+        s3:
+          bucket_name: REPLACE-regional-pyroscope
+          endpoint: s3.us-east-1.amazonaws.com
+          region: us-east-1
+      limits:
+        ingestion_rate_mb: 4
+        ingestion_burst_size_mb: 8
+        max_profile_size_bytes: 4194304
+        max_profile_stacktrace_samples: 16000
+        max_profile_stacktrace_depth: 256
+        max_profile_stacktrace_sample_labels: 8
+        max_label_names_per_series: 12
+        max_label_value_length: 128
+        retention_period: 168h
+    components:
+      distributor:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            memory: 1Gi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: distributor
+      query-frontend:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: 100m
+            memory: 1Gi
+          limits:
+            memory: 1Gi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: query-frontend
+      query-backend:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: query-backend
+      segment-writer:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: '1'
+            memory: 4Gi
+          limits:
+            memory: 4Gi
+        persistence:
+          enabled: true
+          size: 50Gi
+          storageClassName: gp3-encrypted
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: segment-writer
+      metastore:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: topology.kubernetes.io/zone
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: pyroscope
+                  app.kubernetes.io/component: metastore
+        persistence:
+          enabled: true
+          size: 50Gi
+          storageClassName: gp3-encrypted
+      compaction-worker:
+        replicaCount: 3
+        resources:
+          requests:
+            cpu: 500m
+            memory: 2Gi
+          limits:
+            memory: 2Gi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: compaction-worker
+      tenant-settings:
+        replicaCount: 2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 256Mi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: tenant-settings
+      ad-hoc-profiles:
+        replicaCount: 2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 256Mi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: ad-hoc-profiles
+      admin:
+        replicaCount: 2
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            memory: 256Mi
+        topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pyroscope
+              app.kubernetes.io/component: admin

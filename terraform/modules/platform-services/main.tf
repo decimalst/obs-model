@@ -1,10 +1,10 @@
 locals {
-  bucket_names = toset(["mimir-blocks", "mimir-ruler", "mimir-alertmanager", "tempo", "flink"])
-  storage_roles = {
+  bucket_names = toset(concat(["mimir-blocks", "mimir-ruler", "mimir-alertmanager", "tempo", "flink"], var.enable_profiling ? ["pyroscope"] : []))
+  storage_roles = merge({
     mimir = ["mimir-blocks", "mimir-ruler", "mimir-alertmanager"]
     tempo = ["tempo"]
     flink = ["flink"]
-  }
+  }, var.enable_profiling ? { pyroscope = ["pyroscope"] } : {})
 }
 resource "aws_s3_bucket" "telemetry" {
   for_each      = local.bucket_names

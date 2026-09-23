@@ -12,6 +12,31 @@ DEFAULTS = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
 SCHEMA = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
 # Keep identity, topology, endpoint, image, and credential overrides out of tuning.
 ALLOWED = {
+    "hubble": {"enabled": None, "sampleLimit": None},
+    "profiling": {
+        "sampleRate": None,
+        "collectIntervalSeconds": None,
+        "namespaces": None,
+        "resources": {
+            "requests": {"cpu": None, "memory": None},
+            "limits": {"cpu": None, "memory": None},
+        },
+    },
+    "pyroscope": {
+        "pyroscope": {
+            "structuredConfig": {
+                "limits": {
+                    k: None
+                    for k in DEFAULTS["pyroscope"]["pyroscope"]["structuredConfig"]["limits"]
+                }
+            },
+            "components": {
+                name: {"replicaCount": None}
+                for name in DEFAULTS["pyroscope"]["pyroscope"]["components"]
+                if name != "metastore"
+            },
+        }
+    },
     "quota": {k: None for k in DEFAULTS["quota"] if k.endswith(("PerSecond", "Burst"))},
     "logs": {
         k: None
@@ -123,7 +148,10 @@ def validate_tuning(tuning):
     ]:
         if q[debug] > q[total]:
             raise ValueError("debug quota must fit within the total quota")
-    for role, resource in full["resources"].items():
+    for role, resource in {
+        **full["resources"],
+        "profiling": full["profiling"]["resources"],
+    }.items():
         for dimension in ["cpu", "memory"]:
 
             def amount(value, dimension=dimension):

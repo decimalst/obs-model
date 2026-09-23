@@ -1,0 +1,46 @@
+rule_files: [catalog.fixture.yaml]
+evaluation_interval: 1m
+tests:
+- name: sustained high failure burns both windows
+  interval: 1m
+  input_series:
+  - series: 'service_requests_total{service_name="checkout",service_namespace="applications",cloud_region="us-east-1",k8s_cluster_name="east",instance="one",status_class="2xx"}'
+    values: '0+540x370'
+  - series: 'service_requests_total{service_name="checkout",service_namespace="applications",cloud_region="us-east-1",k8s_cluster_name="east",instance="one",status_class="5xx"}'
+    values: '0+60x370'
+  alert_rule_test:
+  - eval_time: 6h
+    alertname: ServiceErrorBudgetBurn
+    exp_alerts:
+    - exp_labels: {cloud_region: us-east-1, k8s_cluster_name: east, service_name: checkout, service_namespace: applications, owner: commerce, slo_source: application, severity: critical}
+      exp_annotations:
+        summary: applications/checkout exceeds its 30-day availability error budget burn threshold
+        runbook_url: https://example.com/runbooks/checkout
+        description: Observed telemetry only; verify coverage and alert delivery before using this SLO operationally.
+    - exp_labels: {cloud_region: us-east-1, k8s_cluster_name: east, service_name: checkout, service_namespace: applications, owner: commerce, slo_source: application, severity: warning}
+      exp_annotations:
+        summary: applications/checkout exceeds its 30-day availability error budget burn threshold
+        runbook_url: https://example.com/runbooks/checkout
+        description: Observed telemetry only; verify coverage and alert delivery before using this SLO operationally.
+- name: no traffic is absent, never a fabricated healthy SLO
+  interval: 1m
+  input_series:
+  - series: 'service_requests_total{service_name="checkout",service_namespace="applications",status_class="2xx"}'
+    values: '0+0x370'
+  promql_expr_test:
+  - expr: service:slo_error_ratio:rate5m
+    eval_time: 6h
+    exp_samples: []
+  alert_rule_test:
+  - eval_time: 6h
+    alertname: ServiceErrorBudgetBurn
+    exp_alerts: []
+- name: healthy traffic and missing telemetry do not page
+  interval: 1m
+  input_series:
+  - series: 'service_requests_total{service_name="checkout",service_namespace="applications",status_class="2xx"}'
+    values: '0+600x370'
+  alert_rule_test:
+  - eval_time: 6h
+    alertname: ServiceErrorBudgetBurn
+    exp_alerts: []

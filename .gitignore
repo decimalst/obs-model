@@ -13,3 +13,6 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 charts/*/charts/
+integrations/*/charts/
+site/generated/
+node_modules/

@@ -39,6 +39,9 @@ spec:
         - {protocol: TCP, port: 5432}
         - {protocol: TCP, port: 6379}
         - {protocol: TCP, port: 10250}
+        {{- if .Values.hubble.enabled }}
+        - {protocol: TCP, port: 9965}
+        {{- end }}
     - to:
         - namespaceSelector:
             matchLabels:

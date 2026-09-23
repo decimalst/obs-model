@@ -57,7 +57,11 @@ def main():
             }
         )
     )
-    image = documents["Deployment", "grafana"]["spec"]["template"]["spec"]["containers"][0]["image"]
+    image = next(
+        c["image"]
+        for c in documents["Deployment", "grafana"]["spec"]["template"]["spec"]["containers"]
+        if c["name"] == "grafana"
+    )
     container = None
     try:
         # Pull separately so first-run image transfer is not constrained by command's 40s timeout.
@@ -101,6 +105,14 @@ def main():
         wait(
             lambda: dashboard().get("dashboard", {}).get("uid") == "service-red", "RED provisioning"
         )
+        catalog = json.loads(request(address, "/api/dashboards/uid/service-catalog"))
+        assert catalog["meta"]["provisioned"] and not catalog["meta"]["canSave"]
+        assert (
+            catalog["dashboard"]["panels"]
+            == json.loads(
+                documents["ConfigMap", "olly-dashboards"]["data"]["service-catalog.json"]
+            )["panels"]
+        )
         actual = dashboard()
         assert actual["meta"]["provisioned"]
         assert not actual["meta"]["canSave"]
@@ -112,7 +124,7 @@ def main():
         (dashboard_dir / "service-red.json").write_text(json.dumps(changed))
         wait(lambda: dashboard()["dashboard"]["title"] == changed["title"], "dashboard reload", 45)
         print(
-            f"PASS: {image} loads the provisioned RED dashboard and variables, "
+            f"PASS: {image} loads the provisioned RED and catalog dashboards and variables, "
             "keeps Viewer edits disabled, and reloads a file update without restart. "
             "Browser rendering and datasource queries are separate acceptance checks."
         )

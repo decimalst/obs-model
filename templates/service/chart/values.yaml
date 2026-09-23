@@ -1,0 +1,4 @@
+# Set a built image digest before rendering/deployment.
+image: ''
+replicas: 3
+profiling: __PROFILE__

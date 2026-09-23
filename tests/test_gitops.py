@@ -77,7 +77,10 @@ class GitOps(unittest.TestCase):
             seen.add(dashboard["uid"])
             self.assertTrue(dashboard["panels"])
             for panel in dashboard["panels"]:
-                self.assertIn(panel["datasource"]["uid"], ["mimir", "tempo", "clickhouse"])
+                if panel["type"] == "text":
+                    self.assertIn(panel["options"]["mode"], ["html", "markdown"])
+                else:
+                    self.assertIn(panel["datasource"]["uid"], ["mimir", "tempo", "clickhouse"])
         self.assertIn("saved-queries", seen)
         rules = docs["ConfigMap", "olly-rules"]["data"]["platform.yaml"]
         self.assertEqual(

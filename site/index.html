@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <title>Olly — Configuration studio</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="app.mjs"></script>
+  </head>
+  <body>
+    <aside>
+      <a class="brand" href="./"
+        ><span class="brand-icon">◉</span> olly<span class="version"
+          >0.5</span
+        ></a
+      >
+      <div class="nav-label">YOUR TELEMETRY PLATFORM</div>
+      <nav aria-label="Workspace">
+        <button class="nav active" data-view="configure">
+          ◫ <span>Deployment studio</span></button
+        ><button class="nav" data-view="catalog">
+          ▦ <span>Service catalog</span></button
+        ><button class="nav" data-view="service">
+          ＋ <span>Create a service</span>
+        </button>
+      </nav>
+      <div class="sidebar-note">
+        <span class="status-dot"></span> Local by design
+        <p>
+          Your configuration stays in this browser. No credentials, uploads or
+          automatic deployments.
+        </p>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <span>WORKSPACE / <b id="breadcrumb">DEPLOYMENT STUDIO</b></span
+        ><a
+          href="https://github.com/topics/observability"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Built for open infrastructure ↗</a
+        >
+      </header>
+      <section id="configure" class="view">
+        <div class="eyebrow">FROM A FEW CHOICES TO A REVIEWABLE PLAN</div>
+        <h1>Your platform.<br /><span>Your environment.</span></h1>
+        <p class="intro">
+          Shape a regional observability platform around your infrastructure.
+          Keep the sensible defaults, change what matters, and take the
+          configuration to Git.
+        </p>
+        <div class="studio-layout">
+          <div class="builder">
+            <ol class="steps" aria-label="Configuration steps">
+              <li>
+                <button data-step="0" class="selected">
+                  1 <span>Environment</span>
+                </button>
+              </li>
+              <li>
+                <button data-step="1">2 <span>Capacity</span></button>
+              </li>
+              <li>
+                <button data-step="2">3 <span>Visibility</span></button>
+              </li>
+              <li>
+                <button data-step="3">4 <span>Review</span></button>
+              </li>
+            </ol>
+            <form id="deployment-form" novalidate>
+              <fieldset data-page="0">
+                <legend>Where will Olly live?</legend>
+                <p class="hint">
+                  One regional cell, spread across three availability zones.
+                </p>
+                <div class="choice-grid">
+                  <label class="choice"
+                    ><input
+                      type="radio"
+                      name="mode"
+                      value="new"
+                      checked
+                    /><strong>New EKS cluster</strong
+                    ><small
+                      >Generate Terraform for the full regional
+                      foundation.</small
+                    ></label
+                  ><label class="choice"
+                    ><input type="radio" name="mode" value="existing" /><strong
+                      >Existing EKS cluster</strong
+                    ><small
+                      >Keep your cluster, roles, buckets and controllers.</small
+                    ></label
+                  >
+                </div>
+                <div class="field-grid">
+                  <label
+                    >Deployment / cluster name<input
+                      name="name"
+                      value="olly-production"
+                      maxlength="24"
+                      required /></label
+                  ><label
+                    >AWS region<input
+                      name="region"
+                      value="us-east-1"
+                      required /></label
+                  ><label class="wide"
+                    >Availability zones
+                    <small>Use actual AZs available in your AWS account.</small
+                    ><input
+                      name="zones"
+                      placeholder="us-east-1a, us-east-1b, us-east-1c"
+                      required /></label
+                  ><label
+                    >VPC network<input
+                      name="vpcCIDR"
+                      value="10.40.0.0/16"
+                      required /></label
+                  ><label id="admin-field"
+                    >Administrator role ARN<input
+                      name="adminRole"
+                      placeholder="arn:aws:iam::123456789012:role/PlatformAdmin" /></label
+                  ><label>Owner<input name="owner" value="platform" /></label
+                  ><label
+                    >Environment<input
+                      name="environment"
+                      value="production" /></label
+                  ><label
+                    >Cost center<input name="costCenter" value="platform"
+                  /></label>
+                </div>
+                <div id="existing-fields" hidden>
+                  <div class="divider"></div>
+                  <h2>Connect your regional services.</h2>
+                  <p class="hint">
+                    Use existing Kubernetes Secrets and a retained, encrypted
+                    storage class. Bucket and role location are verified later
+                    by read-only preflight.
+                  </p>
+                  <div class="field-grid">
+                    <label
+                      >Regional quota Redis hostname<input
+                        name="quotaRedis"
+                        placeholder="quota.example.cache.amazonaws.com" /></label
+                    ><label
+                      >Existing encrypted storage class<input
+                        name="storageClass"
+                        placeholder="retained-encrypted-gp3" /></label
+                    ><label
+                      >Mimir Pod Identity role ARN<input
+                        name="mimirRole"
+                        placeholder="arn:aws:iam::123456789012:role/mimir" /></label
+                    ><label
+                      >Tempo Pod Identity role ARN<input
+                        name="tempoRole"
+                        placeholder="arn:aws:iam::123456789012:role/tempo" /></label
+                    ><label
+                      >Mimir blocks bucket<input
+                        name="mimirBlocks"
+                        placeholder="example-east-mimir-blocks" /></label
+                    ><label
+                      >Mimir ruler bucket<input
+                        name="mimirRuler"
+                        placeholder="example-east-mimir-ruler" /></label
+                    ><label
+                      >Mimir alertmanager bucket<input
+                        name="mimirAlertmanager"
+                        placeholder="example-east-mimir-alertmanager" /></label
+                    ><label
+                      >Tempo bucket<input
+                        name="tempoBucket"
+                        placeholder="example-east-tempo" /></label
+                    ><label
+                      >Pyroscope role ARN (if enabled)<input
+                        name="pyroscopeRole"
+                        placeholder="arn:aws:iam::123456789012:role/pyroscope" /></label
+                    ><label
+                      >Pyroscope bucket (if enabled)<input
+                        name="pyroscopeBucket"
+                        placeholder="example-east-pyroscope"
+                    /></label>
+                  </div>
+                  <h2>Keep controller ownership explicit.</h2>
+                  <p class="hint">
+                    Unchecked means reuse an existing controller. Check only
+                    controllers this platform should install and own.
+                  </p>
+                  <div class="field-grid">
+                    <label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-cert-manager"
+                      /><span>Install cert-manager</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-argo-rollouts"
+                      /><span>Install argo-rollouts</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-strimzi-kafka-operator"
+                      /><span>Install strimzi-kafka-operator</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-opentelemetry-operator"
+                      /><span>Install opentelemetry-operator</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-altinity-clickhouse-operator"
+                      /><span>Install altinity-clickhouse-operator</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-cluster-autoscaler"
+                      /><span>Install cluster-autoscaler</span></label
+                    ><label class="toggle"
+                      ><input
+                        type="checkbox"
+                        name="install-metrics-server"
+                      /><span>Install metrics-server</span></label
+                    ><label class="toggle"
+                      ><input type="checkbox" name="install-keda" /><span
+                        >Install keda</span
+                      ></label
+                    >
+                  </div>
+                  <details>
+                    <summary>Import an existing JSON contract instead</summary>
+                    <label
+                      >Nonsecret existing-platform JSON<textarea
+                        name="existing"
+                        rows="8"
+                      ></textarea></label
+                    ><button
+                      type="button"
+                      id="import-existing"
+                      class="secondary"
+                    >
+                      Use contract coordinates
+                    </button>
+                  </details>
+                </div>
+              </fieldset>
+              <fieldset data-page="1" hidden>
+                <legend>Make room to grow.</legend>
+                <p class="hint">
+                  These are starting budgets. Validate capacity with
+                  representative traffic before production.
+                </p>
+                <div class="field-grid">
+                  <label
+                    >Logs / second, per service<input
+                      type="number"
+                      name="logEventsPerSecond"
+                      value="1000"
+                      min="1"
+                      max="100000"
+                    /><small
+                      >Regional admission budget. The independent byte budget
+                      still applies.</small
+                    ></label
+                  ><label
+                    >Baseline trace candidates (%)<input
+                      type="number"
+                      name="traceBaselinePercent"
+                      value="10"
+                      min="0"
+                      max="100"
+                    /><small
+                      >Errors and slow traces have separate, bounded
+                      tail-sampling allocations.</small
+                    ></label
+                  ><label
+                    >Kafka log partitions<input
+                      type="number"
+                      name="logPartitions"
+                      value="36"
+                      min="3"
+                      max="120"
+                    /><small
+                      >Partition count limits useful consumer
+                      concurrency.</small
+                    ></label
+                  ><label
+                    >Maximum log consumers<input
+                      type="number"
+                      name="writerMax"
+                      value="12"
+                      min="3"
+                      max="120"
+                    /><small>KEDA scales against queue backlog.</small></label
+                  ><label
+                    >ClickHouse write shards<input
+                      type="number"
+                      name="clickhouseShards"
+                      value="2"
+                      min="2"
+                      max="32"
+                    /><small
+                      >Three AZ-separated replicas per shard.</small
+                    ></label
+                  >
+                </div>
+                <div class="callout">
+                  Existing deployment? Shard and partition changes require the
+                  migration procedure. This studio does not move stored data.
+                </div>
+              </fieldset>
+              <fieldset data-page="2" hidden>
+                <legend>See beyond the three signals.</legend>
+                <p class="hint">
+                  Logs, metrics, traces and service RED are included. Add deeper
+                  visibility when the environment is ready.
+                </p>
+                <label
+                  >Network-policy provider<select name="networkProvider">
+                    <option value="aws">AWS VPC CNI (default)</option>
+                    <option value="cilium">
+                      Existing Cilium, managed by cluster owner
+                    </option>
+                  </select></label
+                ><label class="toggle"
+                  ><input type="checkbox" name="hubble" /><span
+                    ><strong>Hubble network visibility</strong
+                    ><small
+                      >Bounded flow, drop, TCP and ICMP metrics. Cilium
+                      installation remains separate.</small
+                    ></span
+                  ></label
+                ><label class="toggle"
+                  ><input type="checkbox" name="profiling" /><span
+                    ><strong>Continuous CPU profiling</strong
+                    ><small
+                      >Alloy eBPF collectors and regional Pyroscope storage.
+                      Requires privileged Linux node access.</small
+                    ></span
+                  ></label
+                >
+                <div class="field-grid">
+                  <label
+                    >Profile sampling frequency (Hz)<input
+                      name="sampleRate"
+                      type="number"
+                      value="19"
+                      min="1"
+                      max="99" /></label
+                  ><label
+                    >Allowed profile namespaces<input
+                      name="profileNamespaces"
+                      value="applications"
+                    /><small
+                      >Only pods labeled observability/profile=true are
+                      selected.</small
+                    ></label
+                  >
+                </div>
+                <div class="callout">
+                  Raw telemetry stays in its originating region. Profiling adds
+                  compute and storage; cross-region replication is not enabled.
+                </div>
+              </fieldset>
+              <fieldset data-page="3" hidden>
+                <legend>Ready for a pull request.</legend>
+                <p class="hint">
+                  Review the generated files. Downloading creates no
+                  infrastructure.
+                </p>
+                <div id="file-tabs" class="file-tabs"></div>
+                <pre
+                  id="preview"
+                  tabindex="0"
+                  aria-label="Generated configuration"
+                ></pre>
+                <p class="hint">
+                  Bundle includes the deployment request, tuning, a Terraform
+                  root or existing-platform contract, and environment-specific
+                  next steps.
+                </p>
+                <button type="button" id="download" class="primary">
+                  Download configuration .zip ↓
+                </button>
+              </fieldset>
+              <p
+                id="deployment-error"
+                class="error"
+                role="alert"
+                aria-live="polite"
+              ></p>
+              <div class="form-nav">
+                <button type="button" id="back" class="secondary">← Back</button
+                ><button type="button" id="next" class="primary">
+                  Continue →
+                </button>
+              </div>
+            </form>
+          </div>
+          <aside class="summary">
+            <span class="eyebrow">YOUR REGIONAL CELL</span>
+            <h2>Connected by default.</h2>
+            <div class="pipeline">
+              <span>Applications</span><i>↓</i>
+              <div>Vector <b>+</b> OpenTelemetry</div>
+              <i>↓</i>
+              <div class="storage">
+                <span>ClickHouse</span><span>Mimir</span><span>Tempo</span>
+              </div>
+              <i>↓</i><span>One Grafana workspace</span>
+            </div>
+            <div class="summary-row">
+              <span>Availability zones</span><b>3</b>
+            </div>
+            <div class="summary-row">
+              <span>Raw data replication</span><b>Regional</b>
+            </div>
+            <div class="summary-row">
+              <span>Configuration ownership</span><b>Git</b>
+            </div>
+            <p>
+              Admission quotas, Arrow interconnects, metric cardinality controls
+              and trace-aware routing are included.
+            </p>
+          </aside>
+        </div>
+      </section>
+      <section id="catalog" class="view" hidden>
+        <div class="eyebrow">OWNERSHIP MEETS OBSERVABILITY</div>
+        <h1>A home for every service.</h1>
+        <p class="intro">
+          Find an owner, open a runbook, and follow the signals. Import your
+          private catalog locally; the public studio never publishes it.
+        </p>
+        <div class="toolbar">
+          <label class="file-button"
+            >Import catalog.json<input
+              type="file"
+              id="catalog-import"
+              accept="application/json,.json" /></label
+          ><input
+            id="catalog-search"
+            placeholder="Search services, owners or namespaces"
+            aria-label="Search service catalog"
+          /><button class="primary" data-open-service>
+            ＋ Register a service
+          </button>
+        </div>
+        <p id="catalog-error" class="error" role="alert"></p>
+        <div id="catalog-list" class="catalog-grid">
+          <div class="empty">
+            <span>▦</span>
+            <h2>Your services belong here.</h2>
+            <p>
+              Import catalog/index.json from your infrastructure repository, or
+              register your first service.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section id="service" class="view" hidden>
+        <div class="eyebrow">A CONSISTENT START FOR EVERY TEAM</div>
+        <h1>Give your service a home.</h1>
+        <p class="intro">
+          Register an existing application or start a new one. The same
+          definition connects ownership, instrumentation and service health.
+        </p>
+        <form id="service-form" class="builder service-form">
+          <div class="choice-grid">
+            <label class="choice"
+              ><input
+                name="creation"
+                type="radio"
+                value="register"
+                checked
+              /><strong>Register existing</strong
+              ><small
+                >Keep your application; standardize its identity.</small
+              ></label
+            ><label class="choice"
+              ><input name="creation" type="radio" value="scaffold" /><strong
+                >Scaffold a new service</strong
+              ><small
+                >Generate a tested Go HTTP service after review.</small
+              ></label
+            >
+          </div>
+          <div class="field-grid">
+            <label
+              >Service name<input
+                name="name"
+                required
+                placeholder="checkout"
+                pattern="[a-z][a-z0-9-]{1,61}[a-z0-9]" /></label
+            ><label
+              >Namespace<input
+                name="namespace"
+                required
+                value="applications" /></label
+            ><label
+              >Owner / team<input
+                name="owner"
+                required
+                placeholder="commerce" /></label
+            ><label
+              >Lifecycle<select name="lifecycle">
+                <option>experimental</option>
+                <option>production</option>
+                <option>deprecated</option>
+              </select></label
+            ><label class="wide"
+              >Description<textarea
+                name="description"
+                required
+                maxlength="400"
+                rows="2"
+              ></textarea></label
+            ><label
+              >Repository URL<input
+                name="repository"
+                type="url"
+                required
+                placeholder="https://github.com/team/checkout" /></label
+            ><label
+              >Runbook URL<input
+                name="runbook"
+                type="url"
+                required
+                placeholder="https://docs.example.com/checkout" /></label
+            ><label
+              >Dependencies
+              <small>Optional namespace/service names, comma separated.</small
+              ><input
+                name="dependencies"
+                placeholder="applications/payments" /></label
+            ><label class="toggle"
+              ><input name="profiling" type="checkbox" /><span
+                >Opt this service into CPU profiling</span
+              ></label
+            >
+          </div>
+          <div class="divider"></div>
+          <h2>Define service health.</h2>
+          <p class="hint">
+            SLO alerts are optional. Verify metric coverage and configure a
+            paging receiver before treating them as operational.
+          </p>
+          <div class="field-grid">
+            <label class="toggle"
+              ><input name="sloEnabled" type="checkbox" /><span
+                >Generate availability SLO alerts</span
+              ></label
+            ><label
+              >Availability target (%)<input
+                name="sloTarget"
+                type="number"
+                min="90"
+                max="99.99"
+                step="0.01"
+                value="99.9" /></label
+            ><label
+              >Source<select name="sloSource">
+                <option value="application">
+                  Direct application request counters
+                </option>
+                <option value="observed-spans">
+                  Observed server spans (coverage-dependent)
+                </option>
+              </select></label
+            >
+          </div>
+          <p id="service-error" class="error" role="alert"></p>
+          <button class="primary" type="submit">
+            Download service definition ↓
+          </button>
+          <div id="service-next" class="callout" hidden></div>
+          <pre
+            id="service-preview"
+            hidden
+            aria-label="Generated service JSON"
+          ></pre>
+        </form>
+      </section>
+      <footer>
+        OLLY / Infrastructure you can read, review and own.<span
+          >Static studio · No account required</span
+        >
+      </footer>
+    </main>
+  </body>
+</html>

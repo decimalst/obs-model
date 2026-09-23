@@ -88,3 +88,35 @@ run "reject_cross_account_direct_role" {
   variables { existing_role_arns = { mimir = "arn:aws:iam::999999999999:role/test" } }
   expect_failures = [aws_eks_pod_identity_association.storage]
 }
+run "profile_storage_is_optional_regional_and_uses_pod_identity" {
+  command = plan
+  variables { enable_profiling = true }
+  assert {
+    condition     = length(aws_s3_bucket.telemetry) == 6 && length(aws_iam_role.storage) == 4 && aws_eks_pod_identity_association.storage["pyroscope"].service_account == "pyroscope" && aws_s3_bucket.telemetry["pyroscope"].force_destroy == false && output.platform.profiling.enabled
+    error_message = "Profiles need a protected regional bucket and their own Pod Identity association."
+  }
+}
+run "profile_reused_roles_remain_external" {
+  command = plan
+  variables {
+    enable_profiling   = true
+    existing_role_arns = { pyroscope = "arn:aws:iam::123456789012:role/existing-profiles" }
+  }
+  assert {
+    condition     = !contains(keys(aws_iam_role.storage), "pyroscope") && !contains(keys(aws_iam_role_policy.storage), "pyroscope") && aws_eks_pod_identity_association.storage["pyroscope"].role_arn == var.existing_role_arns.pyroscope
+    error_message = "Do not adopt or mutate an existing profiling role."
+  }
+}
+run "external_profile_association_requires_profile_role" {
+  command = plan
+  variables {
+    enable_profiling                 = true
+    manage_pod_identity_associations = false
+    existing_role_arns = {
+      mimir = "arn:aws:iam::123456789012:role/existing-mimir"
+      tempo = "arn:aws:iam::123456789012:role/existing-tempo"
+      flink = "arn:aws:iam::123456789012:role/existing-flink"
+    }
+  }
+  expect_failures = [var.existing_role_arns]
+}

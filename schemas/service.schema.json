@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "name",
+    "namespace",
+    "owner",
+    "description",
+    "repository",
+    "runbook",
+    "lifecycle",
+    "profiling",
+    "slo"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "observability/v1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+    },
+    "namespace": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 400
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s<>]*)?$",
+      "maxLength": 500
+    },
+    "runbook": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]+)?(?:/[^\\s<>]*)?$",
+      "maxLength": 500
+    },
+    "lifecycle": {
+      "enum": [
+        "experimental",
+        "production",
+        "deprecated"
+      ]
+    },
+    "profiling": {
+      "type": "boolean"
+    },
+    "dependencies": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 50,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]+/[a-z][a-z0-9-]+$"
+      }
+    },
+    "slo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "target",
+        "source"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "target": {
+          "type": "number",
+          "minimum": 90,
+          "maximum": 99.99
+        },
+        "source": {
+          "enum": [
+            "application",
+            "observed-spans"
+          ]
+        }
+      }
+    }
+  }
+}
