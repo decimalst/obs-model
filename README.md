@@ -117,6 +117,8 @@ The **Service RED — observed traffic** dashboard shows request rate, error rat
 
 Open the [configuration studio](site/index.html) through a local HTTP server, or publish its static allowlist with the manual GitHub Pages workflow. Select new/existing EKS, set budgets and optional visibility, inspect actual generated files, and download a configuration bundle. Nothing applies or publishes automatically. See [studio setup and Pages publication](docs/configuration-studio.md).
 
+The studio also exposes security/SSO profiles, privacy filters, bounded service graphs, regional cell plans and recovery/qualification drafts. Inline guidance explains ownership and unfinished setup, and full request import/export preserves those selections. Live AWS acceptance remains deferred; a downloaded draft does not run any of its checks.
+
 Register applications in the [Git-owned service catalog](docs/service-catalog.md), or generate a Go service with telemetry, tests and an application chart. Grafana receives the service directory and optional availability burn alerts through the same GitOps flow. Repository creation is a separate explicit publish operation; the public site never carries private catalog contents or GitHub credentials.
 
 [Network visibility and CPU profiling](docs/ebpf.md) are separate opt-ins: externally managed Cilium Hubble supplies network metrics/UI, while labeled Alloy eBPF collectors send CPU profiles to regional Pyroscope storage. Managed AWS installs can provision its bucket and Pod Identity role. Privileged kernel collection, CNI migrations, distributed profile ingestion and AZ/restore behavior still require live environment qualification.

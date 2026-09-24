@@ -2,6 +2,8 @@
 
 ## Reproducible local checks
 
+`make studio-test` checks the six-step browser compiler, policy and operations modules, request round trips, malformed/unknown input rejection, static publication allowlist and ZIP contents. Python cross-validation feeds all five security profiles and generated privacy/graph, qualification and cell documents into the actual backend validators. New-cluster budget fixtures deliberately keep raw and reviewed contracts separate to catch loss of selected limits. Browser acceptance should also exercise conditional controls, complete request import, rejected edits, file previews and a narrow layout; it does not prove a hosted Pages deployment or cloud integration.
+
 `make check` runs Terraform formatting, Helm lint, Python lint/format, Go vet/race tests, debug-grant boundary/ownership tests, Helm safety invariants, strict Kubernetes native schemas, and custom-resource validation against the exact pinned CRDs. Kubernetes schema checks intentionally skip CRs; the separate Python validator must cover every application CR kind. Upstream YAML merge expansion is explicit in `bootstrap_crds.py`.
 
 `make terraform-init terraform-test` uses mocked AWS provider data and plan-only Terraform tests. The tests verify three AZs/NAT/node groups, private EKS, protected encrypted data, S3 gateway routing, and reject two-AZ, mixed-region, missing-tag, and undersized-node inputs. They do not validate account quotas, AMI availability, real IAM evaluation, or actual resource creation.

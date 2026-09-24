@@ -86,8 +86,9 @@ catalog:
 studio-test:
 	$(NODE) --check site/app.mjs
 	$(NODE) node_modules/prettier/bin/prettier.cjs --check site scripts/*.mjs tests/*.mjs
-	$(NODE) --test tests/studio.test.mjs
+	$(NODE) --test tests/studio*.test.mjs
 	$(PYTHON) -m unittest discover -s tests -p test_catalog.py -v
+	$(PYTHON) -m unittest discover -s tests -p test_studio_advanced.py -v
 profiling-test:
 	$(PYTHON) scripts/profiling_test.py
 service-test:

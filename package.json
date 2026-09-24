@@ -1,6 +1,6 @@
 {
   "name": "olly-configuration-studio",
-  "version": "0.5.0",
+  "version": "0.8.0",
   "private": true,
   "engines": {
     "node": ">=24 <25"
@@ -8,7 +8,7 @@
   "scripts": {
     "format": "prettier --write site scripts/*.mjs tests/*.mjs",
     "format:check": "prettier --check site scripts/*.mjs tests/*.mjs",
-    "test": "node --test tests/studio.test.mjs"
+    "test": "node --test tests/studio*.test.mjs"
   },
   "devDependencies": {
     "prettier": "3.6.2"

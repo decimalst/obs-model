@@ -9,6 +9,7 @@ import {
   operators,
   zipFiles,
   existingOptions,
+  validateExistingCoordinates,
 } from "../site/model.mjs";
 const good = () => ({
   ...structuredClone(defaults),
@@ -48,6 +49,7 @@ test("rejects unsafe identities, unknown fields, unavailable topology combinatio
     { sampleRate: 0 },
     { sampleRate: 100 },
     { profileNamespaces: ["*"] },
+    { existing: { password: "SYNTHETIC-MARKER" } },
   ])
     assert.throws(() => validateRequest({ ...good(), ...change }));
 });
@@ -89,6 +91,16 @@ test("existing cluster remains externally owned", () => {
   };
   const files = compileRequest(r),
     p = JSON.parse(files["platform.json"]);
+  assert.deepEqual(validateExistingCoordinates(r.existing), r.existing);
+  for (const change of [
+    { security_profile: { authentication: { mode: "oauth" } } },
+    { tuning: { collectors: { traceSamplingPercent: 1 } } },
+    { role_arns: { ...r.existing.role_arns, password: "invalid" } },
+    { buckets: { ...r.existing.buckets, token: "invalid" } },
+  ])
+    assert.throws(() =>
+      validateExistingCoordinates({ ...r.existing, ...change }),
+    );
   assert.equal(p.network_policy_provider, "cilium");
   assert.ok(Object.values(p.operators).every((v) => !v));
   assert.equal(files["main.tf.json"], undefined);
@@ -101,6 +113,17 @@ test("existing cluster remains externally owned", () => {
   ])
     assert.throws(() =>
       compileRequest({ ...r, existing: { ...r.existing, ...change } }),
+    );
+  for (const change of [
+    { buckets: { ...r.existing.buckets, pyroscope: { password: "invalid" } } },
+    { role_arns: { ...r.existing.role_arns, pyroscope: "invalid" } },
+  ])
+    assert.throws(() =>
+      compileRequest({
+        ...r,
+        profiling: false,
+        existing: { ...r.existing, ...change },
+      }),
     );
   mkdirSync("build/studio", { recursive: true });
   writeFileSync("build/studio/existing.json", files["platform.json"]);
@@ -134,4 +157,20 @@ test("ZIP output supports Unicode content", () => {
   assert.equal(new DataView(zip.buffer).getUint32(0, true), 0x04034b50);
   mkdirSync("build/studio", { recursive: true });
   writeFileSync("build/studio/unicode.zip", zip);
+});
+test("older requests receive explicit advanced defaults and full requests round-trip without drift", () => {
+  const old = good();
+  for (const key of [
+    "securityProfile",
+    "privacy",
+    "serviceGraph",
+    "isolation",
+    "qualification",
+  ])
+    delete old[key];
+  const first = compileRequest(old);
+  const resumed = JSON.parse(first["deployment-request.json"]);
+  assert.deepEqual(resumed.privacy, defaults.privacy);
+  assert.deepEqual(compileRequest(resumed), first);
+  assert.equal(Object.hasOwn(old, "privacy"), false);
 });

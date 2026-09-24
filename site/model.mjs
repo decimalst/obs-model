@@ -1,4 +1,15 @@
 // Pure, dependency-free configuration compiler. Shared by the browser and CLI.
+import {
+  policyDefaults,
+  validatePolicies,
+  compilePolicies,
+} from "./policies.mjs";
+import {
+  operationsDefaults,
+  validateOperations,
+  compileOperations,
+  normalizeQualification,
+} from "./operations.mjs";
 export const operators = [
   "cert-manager",
   "argo-rollouts",
@@ -31,6 +42,8 @@ export const defaults = Object.freeze({
   writerMax: 12,
   clickhouseShards: 2,
   existing: null,
+  ...policyDefaults,
+  ...operationsDefaults,
 });
 const json = (value) => JSON.stringify(value, null, 2) + "\n";
 function insist(test, message) {
@@ -95,6 +108,13 @@ export function validateRequest(r) {
     Object.keys(r).every((k) => Object.hasOwn(defaults, k)),
     "Unknown configuration field; never include credentials",
   );
+  // Older version-1 requests remain usable; never replace an explicitly supplied
+  // section or quietly discard new settings during an import.
+  r = {
+    ...structuredClone(policyDefaults),
+    ...structuredClone(operationsDefaults),
+    ...r,
+  };
   insist(r.version === 1, "Unsupported configuration version");
   insist(["new", "existing"].includes(r.mode), "Choose new or existing EKS");
   insist(
@@ -160,8 +180,13 @@ export function validateRequest(r) {
   bounded(r.logPartitions, 3, 120, "Kafka partitions");
   bounded(r.writerMax, 3, r.logPartitions, "Consumer maximum");
   bounded(r.clickhouseShards, 2, 32, "ClickHouse shards");
-  if (r.mode === "new")
+  if (r.mode === "new") {
+    insist(
+      r.existing === null,
+      "New-cluster requests must not contain an existing-cluster contract",
+    );
     insist(role.test(r.adminRole), "Supply the administrator IAM role ARN");
+  }
   if (r.mode === "existing") {
     const e = r.existing;
     insist(
@@ -212,12 +237,36 @@ export function validateRequest(r) {
         e.create_storage_class === false,
       "Explicitly reuse a retained, encrypted storage class",
     );
+    insist(
+      e.buckets &&
+        !Array.isArray(e.buckets) &&
+        Object.keys(e.buckets).every((key) =>
+          [
+            "mimir-blocks",
+            "mimir-ruler",
+            "mimir-alertmanager",
+            "tempo",
+            "pyroscope",
+          ].includes(key),
+        ),
+      "Existing buckets contain unsupported fields; never include credentials",
+    );
+    insist(
+      e.role_arns &&
+        !Array.isArray(e.role_arns) &&
+        Object.keys(e.role_arns).every((key) =>
+          ["mimir", "tempo", "pyroscope"].includes(key),
+        ),
+      "Existing roles contain unsupported fields; never include credentials",
+    );
     for (const name of [
       "mimir-blocks",
       "mimir-ruler",
       "mimir-alertmanager",
       "tempo",
-      ...(r.profiling ? ["pyroscope"] : []),
+      ...(r.profiling || Object.hasOwn(e.buckets, "pyroscope")
+        ? ["pyroscope"]
+        : []),
     ])
       insist(
         /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(e.buckets?.[name] || ""),
@@ -226,7 +275,9 @@ export function validateRequest(r) {
     for (const name of [
       "mimir",
       "tempo",
-      ...(r.profiling ? ["pyroscope"] : []),
+      ...(r.profiling || Object.hasOwn(e.role_arns, "pyroscope")
+        ? ["pyroscope"]
+        : []),
     ])
       insist(
         role.test(e.role_arns?.[name] || ""),
@@ -239,7 +290,26 @@ export function validateRequest(r) {
       "Explicitly select install/reuse for every operator",
     );
   }
+  validatePolicies(r);
+  validateOperations(r);
+  r.qualification = normalizeQualification(r);
   return r;
+}
+export function validateExistingCoordinates(e) {
+  insist(
+    e && typeof e === "object" && !Array.isArray(e),
+    "Supply an existing-platform object",
+  );
+  const r = validateRequest({
+    ...structuredClone(defaults),
+    mode: "existing",
+    name: e.cluster_name,
+    region: e.region,
+    vpcCIDR: e.vpc_cidr,
+    zones: e.availability_zones,
+    existing: structuredClone(e),
+  });
+  return r.existing;
 }
 export function tuning(r) {
   return {
@@ -255,6 +325,7 @@ export function tuning(r) {
     clickhouse: { shards: r.clickhouseShards },
     hubble: { enabled: r.hubble },
     profiling: { sampleRate: r.sampleRate, namespaces: r.profileNamespaces },
+    ...compilePolicies(r).tuning,
   };
 }
 export function compileRequest(input) {
@@ -262,6 +333,8 @@ export function compileRequest(input) {
     files = {
       "deployment-request.json": json(r),
       "tuning.json": json(tuning(r)),
+      ...compilePolicies(r).files,
+      ...compileOperations(r),
     };
   if (r.mode === "new") {
     files["main.tf.json"] = json({
@@ -299,10 +372,44 @@ export function compileRequest(input) {
       network_policy_provider: r.networkProvider,
       profiling: { enabled: r.profiling },
       tuning: tuning(r),
+      ...(r.securityProfile ? { security_profile: r.securityProfile } : {}),
     });
-  files["README.md"] =
-    `# ${r.name}: reviewed deployment configuration\n\nPlace these files at environments/${r.name}/ in the infrastructure repository. No cloud or repository changes have been made.\n\n${r.mode === "new" ? "Configure the encrypted regional S3 Terraform backend and obtain a quota store password through your approved secret process (TF_VAR_quota_redis_auth_token). Initialize Terraform, retain its lock file, review a saved plan, and apply only through your authorized deployment process. Export terraform output -json to platform.json afterward." : "All cluster, networking, secrets, buckets, roles and storage-class ownership remains external. Explicit operator booleans select install or reuse."}\n\nRun the installer with --config environments/${r.name}/platform.json --tuning environments/${r.name}/tuning.json --quota-image YOUR_PUBLISHED_DIGEST --render-only. This validates and renders locally without AWS or Kubernetes calls. Add --security-profile for a reviewed existing-secret/OIDC/ingress configuration. Follow docs/setup-options.md for privacy, service graphs, isolated-cell budgets and the deferred AWS qualification batch. Later use --check-only for live read-only preflight, then the documented installation or GitOps export workflow. Read docs/configuration-studio.md, docs/ebpf.md and docs/runbooks.md before rollout.\n\n${r.profiling ? "Profiling is opt-in and adds privileged node agents plus a regional multi-component backend. Application namespaces must exist. Select only reviewed workloads using observability/profile=true. Qualify kernel, Pod Identity, persistent storage, AZ failure and profile ingestion before production." : "CPU profiling is disabled."}\n\n${r.hubble ? "Cilium remains owned by the cluster networking release. Qualify chaining/policy migration and Hubble metrics before preflight." : "Hubble is disabled."}\n\nTopology changes to an existing installation require migration review: these files are desired configuration, never a safe-shrink procedure. No cross-region raw-data replication is configured.\n`;
+  files["README.md"] = deploymentGuide(r);
   return files;
+}
+function deploymentGuide(r) {
+  const dir = `environments/${r.name}`;
+  return `# ${r.name}: deployment configuration for review
+
+Place these files at ${dir}/ in the infrastructure repository. Nothing has been deployed, published or verified in AWS. Resume the full selection by importing deployment-request.json in the studio. Keep that request private: it contains nonsecret environment coordinates.
+
+## Installation ownership
+
+${r.mode === "new" ? "This bundle generates new regional Terraform. Configure the encrypted regional state backend and obtain the quota password through your approved secret process (TF_VAR_quota_redis_auth_token). Validate locally; real planning/applying remains deferred to the authorized AWS window. Retain the provider lock. After that deployment, export terraform output -json to platform.json. Until actual resource coordinates are available, the installer and cell planner cannot validate this new region." : "This is software-only installation into existing EKS. Cluster, networking, Secrets, buckets, roles and storage-class ownership stays external. Explicit operator booleans select install or reuse. No Terraform infrastructure is generated."}
+
+## Preview the selected configuration
+
+From the infrastructure repository, after platform.json exists:
+
+    .venv/bin/python scripts/install.py --config ${dir}/platform.json --tuning ${dir}/tuning.json${r.securityProfile ? ` --security-profile ${dir}/security-profile.json` : ""} --quota-image YOUR_REGISTRY/log-quota@sha256:YOUR_PUBLISHED_DIGEST --render-only --output-dir build/${r.name}-review
+
+Use a real published image digest. This command renders locally and does not contact AWS/Kubernetes. It persists the complete selected contract and emits prerequisite/externally owned policy examples. Keep that complete contract for GitOps; gitops_export.py accepts the same --tuning and --security-profile files. During the later live window, --check-only reads real prerequisites. Removing both flags changes the cluster. Follow docs/setup-options.md and docs/runbooks.md.
+
+## Selected policies and owner actions
+
+- Grafana access: ${r.securityProfile ? `${r.securityProfile.access.mode}; authentication: ${r.securityProfile.authentication.mode}; internal transport: ${r.securityProfile.internalTransport.mode}. Use security-profile.json and supply the referenced existing Secrets/ConfigMaps through their owners. OAuth needs a registered exact callback and reviewed group roles. Ingress and mesh controllers are never installed implicitly; generated mesh guidance covers Grafana only.` : "Existing chart defaults; no explicit profile generated. Access/identity setup is still required before organization-wide use."}
+- Log privacy: ${r.privacy.logs.mode}. Selected patterns: ${r.privacy.logs.patterns.join(", ")}. These opt-in patterns are lossy and cannot detect every sensitive value. Existing raw/historical data is unchanged.
+- Trace privacy: ${r.privacy.traces.mode}. Strict mode drops events and linked spans and retains only reviewed attributes. Span names ${r.privacy.traces.keepSpanName ? "are explicitly retained and may contain sensitive data" : "are removed in strict mode"}. Review docs/privacy-and-service-graphs.md.
+- Observed service graph: ${r.serviceGraph.enabled ? "enabled with an explicit bounded service-name list" : "disabled"}. Graphs use client/server spans before tail sampling; incomplete SDK instrumentation produces incomplete graphs. Keep names unique within the cell and drain samplers before membership changes.
+- CPU profiling: ${r.profiling ? "enabled; privileged node collection requires reviewed namespaces/workload labels and kernel/storage acceptance" : "disabled"}.
+- Hubble: ${r.hubble ? "enabled using externally managed Cilium; qualify networking ownership first" : "disabled"}.
+
+${r.isolation.enabled || r.qualification ? "Read OPERATIONS.md for the selected cell/recovery plan, required owner inputs and deferred qualification commands." : "Cell plans and qualification drafts were not selected. Use docs/isolation.md and docs/live-qualification.md to prepare them later."}
+
+All actual AWS checks belong in the deferred 26-gate qualification batch. A draft with placeholder hashes is not acceptance evidence. Full internal TLS and authenticated tenant intake still require separately qualified integrations.
+
+Topology changes require migration review. Do not shrink shards/partitions from a downloaded replacement. Log byte budgets remain independent of event rates. No dollar forecast or raw-data cross-region replication is generated, even when a remote recovery target is planned. Read docs/ebpf.md and docs/configuration-studio.md before rollout.
+`;
 }
 export function validateService(s) {
   const keys = [

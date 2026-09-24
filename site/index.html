@@ -16,7 +16,7 @@
     <aside>
       <a class="brand" href="./"
         ><span class="brand-icon">◉</span> olly<span class="version"
-          >0.5</span
+          >0.8</span
         ></a
       >
       <div class="nav-label">YOUR TELEMETRY PLATFORM</div>
@@ -70,9 +70,33 @@
                 <button data-step="2">3 <span>Visibility</span></button>
               </li>
               <li>
-                <button data-step="3">4 <span>Review</span></button>
+                <button data-step="3">
+                  4 <span>Privacy &amp; access</span>
+                </button>
+              </li>
+              <li>
+                <button data-step="4">5 <span>Operations</span></button>
+              </li>
+              <li>
+                <button data-step="5">6 <span>Review</span></button>
               </li>
             </ol>
+            <div class="request-tools">
+              <label class="file-button"
+                >Resume a deployment request<input
+                  type="file"
+                  id="request-import"
+                  accept="application/json,.json"
+              /></label>
+              <button type="button" id="request-export" class="secondary">
+                Save request JSON ↓
+              </button>
+              <p class="hint">
+                Import deployment-request.json to restore every supported
+                choice. Files stay in this browser; unknown settings are
+                rejected.
+              </p>
+            </div>
             <form id="deployment-form" novalidate>
               <fieldset data-page="0">
                 <legend>Where will Olly live?</legend>
@@ -187,6 +211,44 @@
                         placeholder="example-east-pyroscope"
                     /></label>
                   </div>
+                  <details class="option-group">
+                    <summary>Exact cluster and database coordinates</summary>
+                    <p class="hint">
+                      Optional existing installation details. An exact cluster
+                      ARN is required for isolated-cell planning. These names
+                      remain externally owned.
+                    </p>
+                    <div class="field-grid">
+                      <label
+                        >Exact EKS cluster ARN<input
+                          name="clusterARN"
+                          placeholder="arn:aws:eks:us-east-1:123456789012:cluster/olly-production"
+                      /></label>
+                      <label
+                        >Existing controller namespaces<input
+                          name="operatorNamespaces"
+                          placeholder="observability, cert-manager"
+                        /><small
+                          >Comma separated; leave blank for the installer
+                          defaults.</small
+                        ></label
+                      >
+                      <label
+                        >Grafana database name<input
+                          name="grafanaDBName"
+                          placeholder="grafana"
+                      /></label>
+                      <label
+                        >Grafana database username<input
+                          name="grafanaDBUser"
+                          placeholder="grafana"
+                        /><small
+                          >Username only; the password remains in the existing
+                          Secret.</small
+                        ></label
+                      >
+                    </div>
+                  </details>
                   <h2>Keep controller ownership explicit.</h2>
                   <p class="hint">
                     Unchecked means reuse an existing controller. Check only
@@ -236,6 +298,12 @@
                   </div>
                   <details>
                     <summary>Import an existing JSON contract instead</summary>
+                    <p class="hint">
+                      This shortcut accepts supported connection coordinates
+                      only. Advanced imported tuning or security settings are
+                      rejected; use a complete deployment-request.json above to
+                      restore studio choices.
+                    </p>
                     <label
                       >Nonsecret existing-platform JSON<textarea
                         name="existing"
@@ -246,7 +314,7 @@
                       id="import-existing"
                       class="secondary"
                     >
-                      Use contract coordinates
+                      Validate and use contract
                     </button>
                   </details>
                 </div>
@@ -370,21 +438,52 @@
                 </div>
               </fieldset>
               <fieldset data-page="3" hidden>
+                <legend>Control collection and access.</legend>
+                <p class="hint">
+                  Privacy and service graphs are explicit choices. Security
+                  profiles reference resources owned by your identity,
+                  networking and platform teams.
+                </p>
+                <div id="privacy-controls"></div>
+                <div id="service-graph-controls"></div>
+                <div id="security-controls"></div>
+              </fieldset>
+              <fieldset data-page="4" hidden>
+                <legend>Plan operations before rollout.</legend>
+                <p class="hint">
+                  Create reviewable isolation and recovery plans, then keep live
+                  validation in one deferred batch. These choices do not create
+                  backups, infrastructure or passing evidence.
+                </p>
+                <div id="isolation-controls"></div>
+                <div id="qualification-controls"></div>
+              </fieldset>
+              <fieldset data-page="5" hidden>
                 <legend>Ready for a pull request.</legend>
                 <p class="hint">
                   Review the generated files. Downloading creates no
                   infrastructure.
                 </p>
-                <div id="file-tabs" class="file-tabs"></div>
+                <div
+                  id="review-status"
+                  class="callout"
+                  aria-live="polite"
+                ></div>
+                <div
+                  id="file-tabs"
+                  class="file-tabs"
+                  aria-label="Generated files"
+                ></div>
                 <pre
                   id="preview"
                   tabindex="0"
                   aria-label="Generated configuration"
                 ></pre>
                 <p class="hint">
-                  Bundle includes the deployment request, tuning, a Terraform
-                  root or existing-platform contract, and environment-specific
-                  next steps.
+                  The bundle includes your complete request and every selected
+                  policy, planner and qualification draft, plus tailored setup
+                  instructions. Start with the offline render. Every live AWS
+                  gate remains pending until you run and record it later.
                 </p>
                 <button type="button" id="download" class="primary">
                   Download configuration .zip ↓
