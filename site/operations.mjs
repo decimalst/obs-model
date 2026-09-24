@@ -215,7 +215,9 @@ function isolationConfig(r) {
 export function createQualification(r) {
   const selectedAccount =
     selectedClusterAccount(r) ??
-    /^arn:aws:iam::(\d{12}):role\//.exec(r.adminRole || "")?.[1] ??
+    (r.mode === "new"
+      ? /^arn:aws:iam::(\d{12}):role\//.exec(r.iam?.terraformRoleArn || "")?.[1]
+      : null) ??
     "000000000000";
   return {
     version: 1,
@@ -383,6 +385,11 @@ function qualificationConfig(r) {
       !selectedAccount || value.environment.accountId === selectedAccount,
       "Qualification account must match the selected cluster ARN",
     );
+  } else if (r.iam?.terraformRoleArn) {
+    insist(
+      value.environment.accountId === r.iam.terraformRoleArn.split(":")[4],
+      "Qualification account must match the Terraform assumed-role account",
+    );
   }
   const source = value.environment,
     destination = value.recovery.destination;
@@ -435,7 +442,7 @@ export function operationsGuide(r) {
     sections.push(
       "## Recovery and deferred AWS acceptance",
       `qualification.json selects ${qualification.recovery.backupMode} backups and ${qualification.environment.mode} installation ownership. The Hubble, profiling and service-graph gates follow the actual deployment selections. Flink, GitOps and notification flags select future acceptance scope only; they do not install, publish, reconcile or send anything.`,
-      "The source account suggested from an ARN must be confirmed against the future runner's account; an administrator role can belong to another account. Confirm the exact context, independent restore destination, recovery owner and a unique run ID. A different cluster name alone does not prove independent storage or IAM.",
+      "The source account comes from the existing cluster ARN or configured Terraform assumed-role ARN. Without either it is the unresolved 000000000000 placeholder; replace it with the deployment account before qualification. An administrator role may belong to another account and is never used to infer this value. Confirm the exact context, independent restore destination, recovery owner and a unique run ID. A different cluster name alone does not prove independent storage or IAM.",
       "Zero revision/artifact hashes are deliberate pending placeholders. Replace them with the full reviewed commit and SHA-256 hashes of the exact private platform contract and rendered values; managed installations also require the saved reviewed Terraform plan hash. Software-only installations may retain a null Terraform plan hash. Keep the actual plan/state and secret-bearing values out of downloads and evidence. No draft can pass identity acceptance with zero hashes or revision.",
       "Set reviewed RPO/RTO targets before recording recovery success. External backups require the provider's nonsecret runbook reference; neither backup mode installs a backup system. Cross-region recovery requires explicit opt-in, a different region, reviewed RPO/RTO and a cost assessment before that gate can pass. Selecting it does not configure replication or move telemetry.",
       "```sh\n.venv/bin/python scripts/qualification.py --config environments/" +

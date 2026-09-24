@@ -51,7 +51,7 @@ make collector-test rules-test sharding-test consumer-test
 make red-test dashboard-test profiling-test studio-terraform-test
 ```
 
-Checks do not apply Terraform or create AWS resources. The integration test creates and removes only containers and a network bearing its unique test identifier. Its one-broker/one-database topology verifies the data path, not three-AZ failover.
+Checks create no AWS resources. Terraform tests use a mocked AWS provider for plan/apply assertions; they never apply against a live account. The integration test creates and removes only containers and a network bearing its unique test identifier. Its one-broker/one-database topology verifies the data path, not three-AZ failover.
 
 ## Deploy a region
 
@@ -115,7 +115,9 @@ The **Service RED — observed traffic** dashboard shows request rate, error rat
 
 ## Configuration studio, service catalog and eBPF
 
-Open the [configuration studio](site/index.html) through a local HTTP server, or publish its static allowlist with the manual GitHub Pages workflow. Select new/existing EKS, set budgets and optional visibility, inspect actual generated files, and download a configuration bundle. Nothing applies or publishes automatically. See [studio setup and Pages publication](docs/configuration-studio.md).
+Open the [configuration studio](site/index.html) through a local HTTP server, or publish its static allowlist with the manual GitHub Pages workflow. Its seven-step flow selects new/existing EKS, reviews AWS IAM ownership, sets budgets and visibility, configures access and operations, then previews the downloadable files. Nothing applies or publishes automatically. See [studio setup and Pages publication](docs/configuration-studio.md).
+
+The AWS IAM step separates the existing Terraform provisioning identity, the EKS administrator grant and workload role creation/reuse. Each role shows its trust, permission scope and workload binding, and downloads include `IAM.md` and `IAM-PLAN.json`. New regions create seven roles by default or eight with profiling, minus reused workload roles; software-only installations create none. Read the [IAM inventory and owner setup](docs/iam.md) for permissions, external identities and the account-scoped trust boundary.
 
 The studio also exposes security/SSO profiles, privacy filters, bounded service graphs, regional cell plans and recovery/qualification drafts. Inline guidance explains ownership and unfinished setup, and full request import/export preserves those selections. Live AWS acceptance remains deferred; a downloaded draft does not run any of its checks.
 

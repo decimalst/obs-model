@@ -9,6 +9,7 @@ import {
   validateExistingCoordinates,
 } from "./model.mjs";
 import { createQualification } from "./operations.mjs";
+import { iamPlan } from "./iam.mjs";
 const $ = (selector) => document.querySelector(selector),
   $$ = (selector) => [...document.querySelectorAll(selector)],
   form = $("#deployment-form");
@@ -56,6 +57,7 @@ const advancedKeys = [
   "serviceGraph",
   "isolation",
   "qualification",
+  "iam",
 ];
 let advanced = Object.fromEntries(
   advancedKeys.map((key) => [key, structuredClone(defaults[key])]),
@@ -174,6 +176,7 @@ function advancedValues() {
   }
   $("#security-enabled").checked = advanced.securityProfile !== null;
   $("#qualification-enabled").checked = advanced.qualification !== null;
+  syncIAMChoices();
 }
 function enable(parent, id, title, help, callback) {
   const label = document.createElement("label");
@@ -217,6 +220,181 @@ function oauthDefaults() {
     groupsClaim: "groups",
     roles: { Viewer: ["observability-viewers"] },
   };
+}
+function buildIAM() {
+  $("#iam-admin-fields").append($("#admin-field"));
+  for (const name of ["mimirRole", "tempoRole", "pyroscopeRole"])
+    $("#iam-existing-fields").append(form.elements[name].closest("label"));
+  for (const [name, title, hint] of [
+    [
+      "flinkRole",
+      "Existing Flink Pod Identity role ARN (optional)",
+      "Supply together with its regional bucket only when preparing the separately deployed Flink job.",
+    ],
+    [
+      "flinkBucket",
+      "Existing Flink checkpoint bucket (optional)",
+      "Flink jobs and their Kubernetes service account are a separate reviewed integration.",
+    ],
+  ]) {
+    const label = document.createElement("label");
+    const input = document.createElement("input");
+    input.name = name;
+    label.append(
+      document.createTextNode(title),
+      input,
+      textElement("small", hint),
+    );
+    $("#iam-existing-fields").append(label);
+  }
+  field(
+    $("#iam-runner-fields"),
+    "iam.terraformRoleArn",
+    "Existing Terraform provisioning role to assume (optional)",
+    {
+      nullable: true,
+      help: "Blank uses the runner's existing AWS credential chain. An ARN adds provider assume_role only; it does not grant permission to assume it or grant Kubernetes access.",
+      placeholder: "arn:aws:iam::123456789012:role/InfrastructureProvisioner",
+    },
+  );
+  for (const [id, title] of [
+    ["mimir", "Mimir metrics storage"],
+    ["tempo", "Tempo trace storage"],
+    ["flink", "Flink checkpoint foundation"],
+    ["pyroscope", "Pyroscope profiles — only when enabled"],
+  ]) {
+    const row = group($("#iam-workload-choices"), title, "");
+    row.dataset.iamRole = id;
+    const label = document.createElement("label");
+    const choice = document.createElement("select");
+    choice.name = `iam-choice-${id}`;
+    for (const [value, text] of [
+      ["create", "Terraform creates a dedicated role"],
+      ["reuse", "Reuse an externally managed role"],
+    ]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      choice.append(option);
+    }
+    label.append(document.createTextNode(`${title}: ownership`), choice);
+    const reference = document.createElement("label");
+    reference.className = "iam-reuse-field";
+    const input = document.createElement("input");
+    input.name = `iam-role-${id}`;
+    input.placeholder = `arn:aws:iam::123456789012:role/existing-${id}`;
+    reference.append(
+      document.createTextNode(`Existing ${id} role ARN`),
+      input,
+      textElement(
+        "small",
+        "The owner retains trust and policies. Review required_role_policies from Terraform; a role ARN alone is not proof of access.",
+      ),
+    );
+    row.append(label, reference);
+    choice.addEventListener("change", () => {
+      if (choice.value === "reuse")
+        advanced.iam.existingWorkloadRoles[id] = input.value.trim();
+      else delete advanced.iam.existingWorkloadRoles[id];
+      syncIAMChoices();
+      update();
+    });
+    input.addEventListener("input", () => {
+      advanced.iam.existingWorkloadRoles[id] = input.value.trim();
+      update();
+    });
+  }
+  syncIAMChoices();
+}
+function syncIAMChoices() {
+  for (const row of $$("[data-iam-role]")) {
+    const id = row.dataset.iamRole;
+    const reused = Object.hasOwn(advanced.iam.existingWorkloadRoles, id);
+    row.querySelector("select").value = reused ? "reuse" : "create";
+    row.querySelector("input").value =
+      advanced.iam.existingWorkloadRoles[id] ?? "";
+    row.querySelector(".iam-reuse-field").hidden = !reused;
+  }
+}
+function updateIAMSummary() {
+  const target = $("#iam-inventory");
+  target.replaceChildren();
+  try {
+    const plan = iamPlan(request());
+    $("#iam-summary").textContent =
+      `${plan.summary.createdRoles} IAM roles to create · ${plan.summary.reusedRoles} existing runtime roles to reuse · ${plan.summary.createdAssociations} Pod Identity associations to create. ${plan.mode === "new" ? "Existing principals and reused roles remain externally owned." : "All AWS role and association ownership remains external."}`;
+    const execution = group(
+      target,
+      "Deployment identity and account",
+      plan.execution.mechanism,
+    );
+    execution.append(
+      textElement(
+        "p",
+        `Deployment account: ${plan.accountId || "not yet established"}. ${plan.accountSource}.`,
+        "hint",
+      ),
+    );
+    if (plan.execution.roleArn)
+      execution.append(
+        textElement("p", plan.execution.roleArn, "iam-coordinate"),
+      );
+    for (const requirement of plan.execution.requirements)
+      execution.append(textElement("p", requirement, "hint"));
+    for (const role of plan.roles) {
+      const card = document.createElement("details");
+      card.className = "iam-role option-group";
+      card.append(
+        textElement(
+          "summary",
+          `${role.label} — ${role.ownership === "created" ? "Terraform creates" : "Externally owned"}`,
+        ),
+      );
+      if (role.arn || role.namePrefix)
+        card.append(
+          textElement(
+            "p",
+            role.arn
+              ? `Existing ARN: ${role.arn}`
+              : `Created name prefix: ${role.namePrefix}`,
+            "iam-coordinate",
+          ),
+        );
+      for (const [title, value] of [
+        ["Who can assume this role", role.trust],
+        ["Permissions and resource scope", role.permissions],
+        ["Pod Identity binding", role.association],
+      ]) {
+        if (value) {
+          card.append(textElement("h3", title));
+          card.append(
+            textElement("pre", JSON.stringify(value, null, 2), "iam-policy"),
+          );
+        }
+      }
+      for (const note of role.notes || [])
+        card.append(textElement("p", note, "hint"));
+      target.append(card);
+    }
+    for (const [title, entries] of [
+      ["EKS access grants (not IAM role creation)", plan.accessGrants],
+      ["Owner prerequisites", plan.prerequisites],
+      ["Scope and limits", plan.boundaries],
+    ]) {
+      if (!entries?.length) continue;
+      const section = group(target, title, "");
+      for (const item of entries)
+        section.append(
+          textElement(
+            typeof item === "string" ? "p" : "pre",
+            typeof item === "string" ? item : JSON.stringify(item, null, 2),
+            typeof item === "string" ? "hint" : "iam-policy",
+          ),
+        );
+    }
+  } catch (error) {
+    $("#iam-summary").textContent = error.message;
+  }
 }
 function buildAdvanced() {
   const privacy = $("#privacy-controls");
@@ -646,7 +824,7 @@ function buildOperations() {
   const ids = grid(qf);
   field(ids, "qualification.runId", "Unique qualification run ID");
   field(ids, "qualification.environment.accountId", "Source AWS account ID", {
-    help: "Twelve digits. This is an identifier, not a credential.",
+    help: "Twelve digits. Confirm the deployment account; 000000000000 is an unresolved placeholder. A configured Terraform role or existing cluster ARN determines the account, never the administrator ARN.",
   });
   field(ids, "qualification.environment.context", "Exact Kubernetes context");
   field(
@@ -934,6 +1112,9 @@ function request() {
       role_arns: {
         mimir: data.get("mimirRole").trim(),
         tempo: data.get("tempoRole").trim(),
+        ...(data.get("flinkRole").trim()
+          ? { flink: data.get("flinkRole").trim() }
+          : {}),
         ...(data.get("pyroscopeRole").trim()
           ? { pyroscope: data.get("pyroscopeRole").trim() }
           : {}),
@@ -943,6 +1124,9 @@ function request() {
         "mimir-ruler": data.get("mimirRuler").trim(),
         "mimir-alertmanager": data.get("mimirAlertmanager").trim(),
         tempo: data.get("tempoBucket").trim(),
+        ...(data.get("flinkBucket").trim()
+          ? { flink: data.get("flinkBucket").trim() }
+          : {}),
         ...(data.get("pyroscopeBucket").trim()
           ? { pyroscope: data.get("pyroscopeBucket").trim() }
           : {}),
@@ -952,7 +1136,14 @@ function request() {
       ),
     };
   }
-  return { ...r, ...structuredClone(advanced) };
+  return {
+    ...r,
+    ...structuredClone(advanced),
+    iam:
+      r.mode === "new"
+        ? structuredClone(advanced.iam)
+        : structuredClone(defaults.iam),
+  };
 }
 function showFile(name) {
   $("#preview").textContent = files[name];
@@ -965,8 +1156,15 @@ function update() {
   const existing = new FormData(form).get("mode") === "existing";
   $("#existing-fields").hidden = !existing;
   $("#admin-field").hidden = existing;
+  $("#iam-new-controls").hidden = existing;
+  $("#iam-existing-controls").hidden = !existing;
+  $("#iam-mode-note").hidden =
+    !existing ||
+    (!advanced.iam.terraformRoleArn &&
+      Object.keys(advanced.iam.existingWorkloadRoles).length === 0);
   $("#deployment-error").textContent = "";
-  if (step === 5) {
+  if (step === 1 || step === 6) updateIAMSummary();
+  if (step === 6) {
     try {
       const r = request();
       files = compileRequest(r);
@@ -1006,7 +1204,7 @@ function setStep(n, moveFocus = true) {
     e.setAttribute("aria-current", +e.dataset.step === n ? "step" : "false");
   });
   $("#back").hidden = n === 0;
-  $("#next").hidden = n === 5;
+  $("#next").hidden = n === 6;
   update();
   if (moveFocus) {
     const legend = $(`[data-page="${n}"] legend`);
@@ -1017,7 +1215,7 @@ function setStep(n, moveFocus = true) {
 $$("[data-step]").forEach((e) =>
   e.addEventListener("click", () => setStep(+e.dataset.step)),
 );
-$("#next").addEventListener("click", () => setStep(Math.min(5, step + 1)));
+$("#next").addEventListener("click", () => setStep(Math.min(6, step + 1)));
 $("#back").addEventListener("click", () => setStep(Math.max(0, step - 1)));
 form.addEventListener("input", update);
 form.addEventListener("change", update);
@@ -1049,11 +1247,13 @@ function setExisting(e) {
     storageClass: e.storage_class,
     mimirRole: e.role_arns?.mimir,
     tempoRole: e.role_arns?.tempo,
+    flinkRole: e.role_arns?.flink,
     pyroscopeRole: e.role_arns?.pyroscope,
     mimirBlocks: e.buckets?.["mimir-blocks"],
     mimirRuler: e.buckets?.["mimir-ruler"],
     mimirAlertmanager: e.buckets?.["mimir-alertmanager"],
     tempoBucket: e.buckets?.tempo,
+    flinkBucket: e.buckets?.flink,
     pyroscopeBucket: e.buckets?.pyroscope,
     clusterARN: e.cluster_arn,
     operatorNamespaces: e.operator_namespaces?.join(", "),
@@ -1231,5 +1431,6 @@ $("#service-form").addEventListener("submit", (e) => {
     $("#service-error").textContent = e.message;
   }
 });
+buildIAM();
 buildAdvanced();
 setStep(0, false);

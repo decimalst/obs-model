@@ -10,5 +10,5 @@ tags               = { Owner = "platform-team", Environment = "production", Cost
 # }
 # terraform_role_arn = "arn:aws:iam::123456789012:role/deployment"
 # additional_client_security_group_ids = ["sg-EXISTING-WORKER-OR-POD-SG"]
-# manage_pod_identity_associations = false # only if all three associations already exist
+# manage_pod_identity_associations = false # requires all three roles/associations; also pyroscope when profiling is enabled
 # Supply TF_VAR_quota_redis_auth_token from your secret manager, never in this file.

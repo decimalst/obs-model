@@ -1,4 +1,5 @@
 // Pure, dependency-free configuration compiler. Shared by the browser and CLI.
+import { iamDefaults, validateIAM, compileIAM } from "./iam.mjs";
 import {
   policyDefaults,
   validatePolicies,
@@ -44,6 +45,7 @@ export const defaults = Object.freeze({
   existing: null,
   ...policyDefaults,
   ...operationsDefaults,
+  ...iamDefaults,
 });
 const json = (value) => JSON.stringify(value, null, 2) + "\n";
 function insist(test, message) {
@@ -113,6 +115,7 @@ export function validateRequest(r) {
   r = {
     ...structuredClone(policyDefaults),
     ...structuredClone(operationsDefaults),
+    ...structuredClone(iamDefaults),
     ...r,
   };
   insist(r.version === 1, "Unsupported configuration version");
@@ -185,7 +188,10 @@ export function validateRequest(r) {
       r.existing === null,
       "New-cluster requests must not contain an existing-cluster contract",
     );
-    insist(role.test(r.adminRole), "Supply the administrator IAM role ARN");
+    insist(
+      role.test(r.adminRole),
+      "Supply the existing role to grant EKS cluster administrator access; this does not select Terraform credentials",
+    );
   }
   if (r.mode === "existing") {
     const e = r.existing;
@@ -246,6 +252,7 @@ export function validateRequest(r) {
             "mimir-ruler",
             "mimir-alertmanager",
             "tempo",
+            "flink",
             "pyroscope",
           ].includes(key),
         ),
@@ -255,7 +262,7 @@ export function validateRequest(r) {
       e.role_arns &&
         !Array.isArray(e.role_arns) &&
         Object.keys(e.role_arns).every((key) =>
-          ["mimir", "tempo", "pyroscope"].includes(key),
+          ["mimir", "tempo", "flink", "pyroscope"].includes(key),
         ),
       "Existing roles contain unsupported fields; never include credentials",
     );
@@ -264,6 +271,10 @@ export function validateRequest(r) {
       "mimir-ruler",
       "mimir-alertmanager",
       "tempo",
+      ...(Object.hasOwn(e.buckets, "flink") ||
+      Object.hasOwn(e.role_arns, "flink")
+        ? ["flink"]
+        : []),
       ...(r.profiling || Object.hasOwn(e.buckets, "pyroscope")
         ? ["pyroscope"]
         : []),
@@ -275,6 +286,10 @@ export function validateRequest(r) {
     for (const name of [
       "mimir",
       "tempo",
+      ...(Object.hasOwn(e.buckets, "flink") ||
+      Object.hasOwn(e.role_arns, "flink")
+        ? ["flink"]
+        : []),
       ...(r.profiling || Object.hasOwn(e.role_arns, "pyroscope")
         ? ["pyroscope"]
         : []),
@@ -291,6 +306,7 @@ export function validateRequest(r) {
     );
   }
   validatePolicies(r);
+  validateIAM(r);
   validateOperations(r);
   r.qualification = normalizeQualification(r);
   return r;
@@ -335,6 +351,7 @@ export function compileRequest(input) {
       "tuning.json": json(tuning(r)),
       ...compilePolicies(r).files,
       ...compileOperations(r),
+      ...compileIAM(r),
     };
   if (r.mode === "new") {
     files["main.tf.json"] = json({
@@ -345,7 +362,14 @@ export function compileRequest(input) {
           aws: { source: "hashicorp/aws", version: "6.66.0" },
         },
       },
-      provider: { aws: { region: r.region } },
+      provider: {
+        aws: {
+          region: r.region,
+          ...(r.iam.terraformRoleArn
+            ? { assume_role: { role_arn: r.iam.terraformRoleArn } }
+            : {}),
+        },
+      },
       variable: { quota_redis_auth_token: { type: "string", sensitive: true } },
       module: {
         region: {
@@ -355,6 +379,7 @@ export function compileRequest(input) {
           vpc_cidr: r.vpcCIDR,
           availability_zones: r.zones,
           admin_principal_arn: r.adminRole,
+          existing_role_arns: r.iam.existingWorkloadRoles,
           quota_redis_auth_token: "${var.quota_redis_auth_token}",
           enable_profiling: r.profiling,
           tags: {
@@ -388,6 +413,8 @@ Place these files at ${dir}/ in the infrastructure repository. Nothing has been 
 ${r.mode === "new" ? "This bundle generates new regional Terraform. Configure the encrypted regional state backend and obtain the quota password through your approved secret process (TF_VAR_quota_redis_auth_token). Validate locally; real planning/applying remains deferred to the authorized AWS window. Retain the provider lock. After that deployment, export terraform output -json to platform.json. Until actual resource coordinates are available, the installer and cell planner cannot validate this new region." : "This is software-only installation into existing EKS. Cluster, networking, Secrets, buckets, roles and storage-class ownership stays external. Explicit operator booleans select install or reuse. No Terraform infrastructure is generated."}
 
 ## Preview the selected configuration
+
+Read IAM.md and IAM-PLAN.json before deployment. They distinguish the Terraform provisioning identity, the existing EKS administrator principal, created infrastructure roles and created/reused workload roles. No role or policy has been applied by this export. The saved Terraform plan is authoritative for final names, policies and replacements. Kubernetes service accounts/RBAC and Grafana Viewer/Editor/Admin roles are separate from AWS IAM.
 
 From the infrastructure repository, after platform.json exists:
 

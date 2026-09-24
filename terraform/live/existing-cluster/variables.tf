@@ -14,12 +14,14 @@ variable "additional_client_security_group_ids" {
   default = []
 }
 variable "existing_role_arns" {
-  type    = map(string)
-  default = {}
+  description = "Existing storage workload IAM roles keyed by mimir, tempo, flink, and enabled pyroscope. Trust and permission policies remain owned by the role owner; omitted enabled roles are created."
+  type        = map(string)
+  default     = {}
 }
 variable "manage_pod_identity_associations" {
-  type    = bool
-  default = true
+  description = "Create exact observability namespace/service-account associations for the selected roles. Set false only when the cluster owner already manages all enabled associations; this requires all corresponding role ARNs."
+  type        = bool
+  default     = true
 }
 variable "terraform_role_arn" {
   description = "Optional existing deployment role to assume. AWS_PROFILE and standard credential chains also work. This does not create or grant EKS access."

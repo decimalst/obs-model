@@ -16,7 +16,7 @@
     <aside>
       <a class="brand" href="./"
         ><span class="brand-icon">◉</span> olly<span class="version"
-          >0.8</span
+          >0.9</span
         ></a
       >
       <div class="nav-label">YOUR TELEMETRY PLATFORM</div>
@@ -64,21 +64,24 @@
                 </button>
               </li>
               <li>
-                <button data-step="1">2 <span>Capacity</span></button>
+                <button data-step="1">2 <span>AWS IAM</span></button>
               </li>
               <li>
-                <button data-step="2">3 <span>Visibility</span></button>
+                <button data-step="2">3 <span>Capacity</span></button>
               </li>
               <li>
-                <button data-step="3">
-                  4 <span>Privacy &amp; access</span>
+                <button data-step="3">4 <span>Visibility</span></button>
+              </li>
+              <li>
+                <button data-step="4">
+                  5 <span>Privacy &amp; access</span>
                 </button>
               </li>
               <li>
-                <button data-step="4">5 <span>Operations</span></button>
+                <button data-step="5">6 <span>Operations</span></button>
               </li>
               <li>
-                <button data-step="5">6 <span>Review</span></button>
+                <button data-step="6">7 <span>Review</span></button>
               </li>
             </ol>
             <div class="request-tools">
@@ -117,7 +120,7 @@
                     ></label
                   ><label class="choice"
                     ><input type="radio" name="mode" value="existing" /><strong
-                      >Existing EKS cluster</strong
+                      >Existing EKS — software only</strong
                     ><small
                       >Keep your cluster, roles, buckets and controllers.</small
                     ></label
@@ -148,7 +151,7 @@
                       value="10.40.0.0/16"
                       required /></label
                   ><label id="admin-field"
-                    >Administrator role ARN<input
+                    >Existing EKS administrator role ARN<input
                       name="adminRole"
                       placeholder="arn:aws:iam::123456789012:role/PlatformAdmin" /></label
                   ><label>Owner<input name="owner" value="platform" /></label
@@ -320,6 +323,103 @@
                 </div>
               </fieldset>
               <fieldset data-page="1" hidden>
+                <legend>Who creates and uses each AWS role?</legend>
+                <p class="hint">
+                  AWS provisioning permissions, access to Kubernetes, and
+                  permissions used by running services are separate. This step
+                  shows exactly what this configuration creates and what your
+                  team must supply.
+                </p>
+                <div id="iam-new-controls">
+                  <section class="option-group">
+                    <h2>1. Identity running Terraform</h2>
+                    <p class="hint">
+                      Use your existing AWS profile/SSO/CI identity, or have the
+                      Terraform AWS provider assume an existing provisioning
+                      role. The role must already exist and trust the runner.
+                      This setting creates no role, does not configure
+                      state-backend credentials, and does not change the AWS CLI
+                      or Kubernetes installer's identity.
+                    </p>
+                    <div id="iam-runner-fields"></div>
+                  </section>
+                  <section class="option-group">
+                    <h2>2. Principal allowed to administer EKS</h2>
+                    <p class="hint">
+                      Terraform creates an EKS access entry and grants this
+                      existing role cluster-wide AmazonEKSClusterAdminPolicy
+                      access. It does not create the role or give it AWS
+                      provisioning permissions. Choose the role your
+                      installer/operators will actually assume; the cluster
+                      creator receives no automatic Kubernetes admin access.
+                    </p>
+                    <div id="iam-admin-fields"></div>
+                  </section>
+                  <section class="option-group">
+                    <h2>3. Workload roles for regional storage</h2>
+                    <p class="hint">
+                      Create separate roles by default, or reuse roles already
+                      managed by your IAM team. Reused trust and permission
+                      policies are never modified; Terraform still creates the
+                      Pod Identity associations for this new cluster. All direct
+                      workload roles must belong to the deployment account.
+                    </p>
+                    <div id="iam-workload-choices"></div>
+                    <p class="hint">
+                      The Flink bucket, role and association are provisioned as
+                      a foundation even when no Flink job is enabled. Pyroscope
+                      is provisioned only when CPU profiling is enabled in
+                      Visibility. Changing role ownership after deployment needs
+                      a reviewed Terraform state migration.
+                    </p>
+                  </section>
+                </div>
+                <div id="iam-existing-controls" hidden>
+                  <h2>Software-only: all AWS IAM stays external.</h2>
+                  <p id="iam-mode-note" class="hint" hidden>
+                    Your new-cluster IAM choices are kept in this browser while
+                    you switch modes. This software-only request uses the role
+                    references below and excludes those new-cluster choices.
+                    Switch back to New EKS to save that separate configuration.
+                  </p>
+                  <p class="hint">
+                    This path creates no IAM roles, policies, EKS access entries
+                    or Pod Identity associations. Supply the workload roles and
+                    have their owners create the exact associations below before
+                    installation. Helm service accounts and Kubernetes RBAC do
+                    not create AWS IAM roles.
+                  </p>
+                  <div id="iam-existing-fields" class="field-grid"></div>
+                  <p class="hint">
+                    Your cluster owner must also provide EKS access for the
+                    install runner, node/CNI permissions, the Pod Identity agent
+                    and EBS CSI identity. Installing the autoscaler Helm
+                    controller does not create its AWS role or association.
+                    Existing EKS with Terraform-managed regional data services
+                    is a separate CLI path described in
+                    docs/existing-clusters.md.
+                  </p>
+                </div>
+                <section class="option-group">
+                  <h2>Role ownership and permissions</h2>
+                  <p id="iam-summary" role="status"></p>
+                  <p class="hint">
+                    Names ending in a dash are Terraform name prefixes;
+                    Terraform generates the final suffix. Expand a role for its
+                    exact trust, permission scope and workload binding. The
+                    saved Terraform plan remains authoritative; no roles are
+                    created in this browser.
+                  </p>
+                  <div id="iam-inventory"></div>
+                </section>
+                <p class="hint">
+                  Grafana Viewer/Editor/Admin groups control the Grafana
+                  application. Kubernetes service accounts/Roles control the
+                  Kubernetes API. Neither is an AWS IAM role. IAM.md and
+                  IAM-PLAN.json are included in every download.
+                </p>
+              </fieldset>
+              <fieldset data-page="2" hidden>
                 <legend>Make room to grow.</legend>
                 <p class="hint">
                   These are starting budgets. Validate capacity with
@@ -384,7 +484,7 @@
                   migration procedure. This studio does not move stored data.
                 </div>
               </fieldset>
-              <fieldset data-page="2" hidden>
+              <fieldset data-page="3" hidden>
                 <legend>See beyond the three signals.</legend>
                 <p class="hint">
                   Logs, metrics, traces and service RED are included. Add deeper
@@ -437,7 +537,7 @@
                   compute and storage; cross-region replication is not enabled.
                 </div>
               </fieldset>
-              <fieldset data-page="3" hidden>
+              <fieldset data-page="4" hidden>
                 <legend>Control collection and access.</legend>
                 <p class="hint">
                   Privacy and service graphs are explicit choices. Security
@@ -448,7 +548,7 @@
                 <div id="service-graph-controls"></div>
                 <div id="security-controls"></div>
               </fieldset>
-              <fieldset data-page="4" hidden>
+              <fieldset data-page="5" hidden>
                 <legend>Plan operations before rollout.</legend>
                 <p class="hint">
                   Create reviewable isolation and recovery plans, then keep live
@@ -458,7 +558,7 @@
                 <div id="isolation-controls"></div>
                 <div id="qualification-controls"></div>
               </fieldset>
-              <fieldset data-page="5" hidden>
+              <fieldset data-page="6" hidden>
                 <legend>Ready for a pull request.</legend>
                 <p class="hint">
                   Review the generated files. Downloading creates no

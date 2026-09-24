@@ -5,7 +5,15 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ("index.html", "style.css", "app.mjs", "model.mjs", "policies.mjs", "operations.mjs")
+FILES = (
+    "index.html",
+    "style.css",
+    "app.mjs",
+    "model.mjs",
+    "policies.mjs",
+    "operations.mjs",
+    "iam.mjs",
+)
 
 
 def build(destination):

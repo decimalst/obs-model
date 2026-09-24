@@ -27,6 +27,8 @@ test("new cluster bundle keeps secrets out and preserves regional topology", () 
     "${var.quota_redis_auth_token}",
   );
   assert.deepEqual(tf.module.region.availability_zones, r.zones);
+  assert.deepEqual(tf.module.region.existing_role_arns, {});
+  assert.equal(tf.provider.aws.assume_role, undefined);
   assert.equal(
     JSON.parse(f["tuning.json"]).collectors.traceSamplingPercent,
     10,
@@ -34,6 +36,42 @@ test("new cluster bundle keeps secrets out and preserves regional topology", () 
   assert.equal(f["platform.json"], undefined);
   mkdirSync("build/studio-new", { recursive: true });
   writeFileSync("build/studio-new/main.tf.json", f["main.tf.json"]);
+});
+test("IAM selections compile to actual Terraform inputs and a matching review without credential inference", () => {
+  const r = good();
+  r.adminRole = "arn:aws:iam::999999999999:role/ExternalAdministrator";
+  r.profiling = true;
+  r.iam = {
+    terraformRoleArn: "arn:aws:iam::123456789012:role/Provisioner",
+    existingWorkloadRoles: Object.fromEntries(
+      ["mimir", "tempo", "flink", "pyroscope"].map((id) => [
+        id,
+        `arn:aws:iam::123456789012:role/existing-${id}`,
+      ]),
+    ),
+  };
+  const files = compileRequest(r),
+    tf = JSON.parse(files["main.tf.json"]),
+    plan = JSON.parse(files["IAM-PLAN.json"]);
+  assert.deepEqual(tf.provider.aws.assume_role, {
+    role_arn: r.iam.terraformRoleArn,
+  });
+  assert.deepEqual(
+    tf.module.region.existing_role_arns,
+    r.iam.existingWorkloadRoles,
+  );
+  assert.equal(tf.module.region.admin_principal_arn, r.adminRole);
+  assert.equal(plan.accountId, "123456789012");
+  assert.equal(plan.summary.createdRoles, 4);
+  assert.equal(plan.summary.reusedRoles, 4);
+  assert.equal(plan.summary.createdAssociations, 6);
+  assert.match(files["IAM.md"], /state backend/);
+  assert.deepEqual(
+    compileRequest(JSON.parse(files["deployment-request.json"])),
+    files,
+  );
+  mkdirSync("build/studio-iam", { recursive: true });
+  writeFileSync("build/studio-iam/main.tf.json", files["main.tf.json"]);
 });
 test("rejects unsafe identities, unknown fields, unavailable topology combinations and consumer overrun", () => {
   for (const change of [
@@ -72,6 +110,7 @@ test("existing cluster remains externally owned", () => {
     role_arns: {
       mimir: r.adminRole,
       tempo: r.adminRole,
+      flink: "arn:aws:iam::123456789012:role/Flink",
       pyroscope: r.adminRole,
     },
     buckets: Object.fromEntries(
@@ -80,6 +119,7 @@ test("existing cluster remains externally owned", () => {
         "mimir-ruler",
         "mimir-alertmanager",
         "tempo",
+        "flink",
         "pyroscope",
       ].map((k) => [k, "example-east-" + k]),
     ),
@@ -104,6 +144,18 @@ test("existing cluster remains externally owned", () => {
   assert.equal(p.network_policy_provider, "cilium");
   assert.ok(Object.values(p.operators).every((v) => !v));
   assert.equal(files["main.tf.json"], undefined);
+  assert.equal(JSON.parse(files["IAM-PLAN.json"]).summary.createdRoles, 0);
+  assert.equal(
+    JSON.parse(files["IAM-PLAN.json"]).summary.createdAssociations,
+    0,
+  );
+  assert.equal(p.role_arns.flink, r.existing.role_arns.flink);
+  assert.equal(p.buckets.flink, r.existing.buckets.flink);
+  for (const key of ["role_arns", "buckets"]) {
+    const missing = structuredClone(r);
+    delete missing.existing[key].flink;
+    assert.throws(() => compileRequest(missing), /flink/);
+  }
   assert.deepEqual(existingOptions(p), existingOptions(r.existing));
   assert.equal(p.grafana_db_name, "existing_grafana");
   for (const change of [
@@ -166,11 +218,13 @@ test("older requests receive explicit advanced defaults and full requests round-
     "serviceGraph",
     "isolation",
     "qualification",
+    "iam",
   ])
     delete old[key];
   const first = compileRequest(old);
   const resumed = JSON.parse(first["deployment-request.json"]);
   assert.deepEqual(resumed.privacy, defaults.privacy);
+  assert.deepEqual(resumed.iam, defaults.iam);
   assert.deepEqual(compileRequest(resumed), first);
   assert.equal(Object.hasOwn(old, "privacy"), false);
 });

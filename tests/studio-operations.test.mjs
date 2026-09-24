@@ -60,6 +60,7 @@ test("qualification facts are derived from actual selections, other flags select
   r.existing = {
     cluster_arn: "arn:aws:eks:us-east-1:123456789012:cluster/olly-production",
   };
+  r.qualification.environment.accountId = "123456789012";
   r.qualification.environment.cluster = "stale-cluster";
   r.qualification.environment.region = "eu-west-1";
   r.qualification.environment.mode = "existing";
@@ -77,6 +78,19 @@ test("qualification facts are derived from actual selections, other flags select
   assert.throws(() => compileOperations(r), /account must match/);
   const fresh = createQualification(r);
   assert.equal(fresh.deploymentArtifacts.terraformPlanSHA256, null);
+});
+test("qualification account follows deployment identity, never the administrator's account", () => {
+  const r = good();
+  assert.equal(createQualification(r).environment.accountId, "000000000000");
+  r.iam = {
+    terraformRoleArn: "arn:aws:iam::210987654321:role/Provisioner",
+    existingWorkloadRoles: {},
+  };
+  r.qualification = createQualification(r);
+  assert.equal(r.qualification.environment.accountId, "210987654321");
+  assert.doesNotThrow(() => compileOperations(r));
+  r.qualification.environment.accountId = "123456789012";
+  assert.throws(() => compileOperations(r), /Terraform assumed-role account/);
 });
 test("recovery destination, cross-region opt-in and nullable reviewed targets are validated", () => {
   const r = withQualification();

@@ -502,6 +502,16 @@ footer {
   outline: 3px solid #70a727;
   outline-offset: 3px;
 }
+.iam-policy {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.iam-coordinate {
+  overflow-wrap: anywhere;
+}
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));

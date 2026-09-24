@@ -34,7 +34,7 @@ variable "existing_role_arns" {
   default     = {}
   validation {
     condition     = var.manage_pod_identity_associations || alltrue([for key in concat(["mimir", "tempo", "flink"], var.enable_profiling ? ["pyroscope"] : []) : contains(keys(var.existing_role_arns), key)])
-    error_message = "Externally managed associations require all three existing workload role ARNs."
+    error_message = "Externally managed associations require every enabled workload role ARN: mimir, tempo, flink, and pyroscope when profiling is enabled."
   }
   validation {
     condition     = alltrue([for k, v in var.existing_role_arns : contains(["mimir", "tempo", "flink", "pyroscope"], k) && can(regex("^arn:aws:iam::[0-9]{12}:role/.+", v))])

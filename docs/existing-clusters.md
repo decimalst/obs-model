@@ -10,14 +10,16 @@ Choose the ownership boundary that fits your environment:
 
 All modes retain three-AZ placement, regional ingestion, shared log quotas, sampling limits and expiring debug grants. Existing EKS support does not import or take over your cluster. Namespaces and release names remain fixed at `observability`, `observability-system`, `olly` and `operators`; use one platform installation per cluster.
 
+Review the [IAM and Kubernetes identity inventory](iam.md) before choosing role ownership. It lists every role created by each path, trust and storage permissions, externally supplied installer/CI identities, and the separate EKS administrator access grant.
+
 ## Existing EKS with new data services
 
 Use [the existing-cluster Terraform root](../terraform/live/existing-cluster). Start from `inputs.example.tfvars`, with your region, cluster name, three private subnet IDs in distinct AZs, ownership tags, and a unique platform name. The module discovers the VPC, cluster security group and actual AZs from AWS. It rejects subnets from another VPC and subnets that automatically assign public IPs. Review private route tables as well: absence of automatic public IP assignment is not proof of a private route.
 
 Optionally provide:
 
-- `existing_role_arns`: any subset of `mimir`, `tempo`, `flink`. Omitted roles are created; supplied roles receive no IAM policy/trust changes. Terraform outputs `required_role_policies` for the existing role owner to review and attach.
-- `manage_pod_identity_associations = false`: retain external ownership of all service-account associations. In this mode provide all three existing roles; do not leave newly generated roles disconnected from their externally managed associations.
+- `existing_role_arns`: any subset of `mimir`, `tempo`, `flink`, plus `pyroscope` when `enable_profiling = true`. Omitted active roles are created; supplied roles receive no IAM policy/trust changes. Terraform outputs `required_role_policies` for the existing role owner to review and attach. The Flink storage scaffold is created even while its optional application remains disabled.
+- `manage_pod_identity_associations = false`: retain external ownership of all service-account associations. In this mode provide all three base roles and the fourth, `pyroscope`, when profiling is enabled; the cluster owner must already manage their exact associations. Do not leave newly generated roles disconnected from externally managed associations.
 - `terraform_role_arn`: assume your existing provisioning role. Standard AWS credential chains and `AWS_PROFILE` also work. This role is not automatically used by AWS CLI or granted Kubernetes access; configure the install runner's identity separately.
 - `additional_client_security_group_ids`: existing node/pod security groups that need database/cache access. Rules are created on the **new** data-services security group; existing groups are not modified. Their egress rules remain your responsibility.
 

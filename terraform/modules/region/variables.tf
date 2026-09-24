@@ -7,7 +7,7 @@ variable "name" {
 }
 variable "region" { type = string }
 variable "existing_role_arns" {
-  description = "Optional externally managed mimir/tempo/flink Pod Identity role ARNs."
+  description = "Optional externally managed mimir/tempo/flink and enabled pyroscope storage Pod Identity role ARNs. Terraform still creates their associations and all four infrastructure roles; it never edits supplied roles or policies."
   type        = map(string)
   default     = {}
 }
@@ -24,10 +24,11 @@ variable "kubernetes_version" {
   default = "1.35"
 }
 variable "admin_principal_arn" {
-  type = string
+  description = "Existing IAM role granted cluster-wide EKS administrator access. This is an access grant, not a new IAM role or the Terraform provisioning identity."
+  type        = string
   validation {
     condition     = can(regex("^arn:aws:iam::[0-9]{12}:role/", var.admin_principal_arn))
-    error_message = "Supply a deployment/admin IAM role ARN, not a user or root ARN."
+    error_message = "Supply an existing IAM role ARN for cluster-wide EKS administrator access, not a user or root ARN. This does not select the Terraform provisioning identity."
   }
 }
 variable "tags" {

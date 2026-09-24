@@ -1,6 +1,12 @@
 mock_provider "aws" {
   mock_data "aws_caller_identity" { defaults = { account_id = "123456789012" } }
   mock_data "aws_iam_policy_document" { defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" } }
+  mock_resource "aws_iam_role" {
+    defaults = { arn = "arn:aws:iam::123456789012:role/mock-storage-role" }
+  }
+  mock_resource "aws_db_instance" {
+    defaults = { master_user_secret = [{ secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:mock-grafana" }] }
+  }
 }
 variables {
   name                      = "olly-test"
@@ -28,6 +34,88 @@ run "protected_regional_services" {
   assert {
     condition     = length(aws_iam_role.storage) == 3 && length(aws_eks_pod_identity_association.storage) == 3 && output.platform.availability_zones == var.availability_zones
     error_message = "Managed mode creates all roles and preserves actual AZ coordinates."
+  }
+}
+run "storage_iam_scopes_and_exact_bindings" {
+  # Mock apply resolves computed bucket ARNs for scope assertions. The mock AWS
+  # provider performs no AWS API calls and creates no cloud infrastructure.
+  command = apply
+  variables { enable_profiling = true }
+  override_resource {
+    target = aws_iam_role.storage["mimir"]
+    values = { arn = "arn:aws:iam::123456789012:role/mock-mimir" }
+  }
+  override_resource {
+    target = aws_iam_role.storage["tempo"]
+    values = { arn = "arn:aws:iam::123456789012:role/mock-tempo" }
+  }
+  override_resource {
+    target = aws_iam_role.storage["flink"]
+    values = { arn = "arn:aws:iam::123456789012:role/mock-flink" }
+  }
+  override_resource {
+    target = aws_iam_role.storage["pyroscope"]
+    values = { arn = "arn:aws:iam::123456789012:role/mock-pyroscope" }
+  }
+  assert {
+    condition = (
+      toset(keys(local.storage_roles)) == toset(["mimir", "tempo", "flink", "pyroscope"]) &&
+      toset(local.storage_roles.mimir) == toset(["mimir-blocks", "mimir-ruler", "mimir-alertmanager"]) &&
+      toset(local.storage_roles.tempo) == toset(["tempo"]) &&
+      toset(local.storage_roles.flink) == toset(["flink"]) &&
+      toset(local.storage_roles.pyroscope) == toset(["pyroscope"])
+    )
+    error_message = "Storage roles must keep their documented component-to-bucket boundaries."
+  }
+  assert {
+    condition = alltrue([
+      for component, buckets in local.storage_roles : (
+        length(data.aws_iam_policy_document.storage[component].statement) == 2 &&
+        data.aws_iam_policy_document.storage[component].statement[0].actions == toset(["s3:ListBucket", "s3:GetBucketLocation"]) &&
+        data.aws_iam_policy_document.storage[component].statement[0].resources == toset([for bucket in buckets : aws_s3_bucket.telemetry[bucket].arn]) &&
+        data.aws_iam_policy_document.storage[component].statement[1].actions == toset(["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"]) &&
+        data.aws_iam_policy_document.storage[component].statement[1].resources == toset([for bucket in buckets : "${aws_s3_bucket.telemetry[bucket].arn}/*"])
+      )
+    ])
+    error_message = "Storage IAM must grant only the listed bucket operations and object operations inside each component's buckets."
+  }
+  assert {
+    condition = alltrue([
+      for component, association in aws_eks_pod_identity_association.storage : (
+        association.cluster_name == "existing" &&
+        association.namespace == "observability" &&
+        association.service_account == component &&
+        association.role_arn == aws_iam_role.storage[component].arn
+      )
+    ])
+    error_message = "Every enabled component must bind its own role to the exact cluster, namespace and service account."
+  }
+  assert {
+    condition = (
+      one(data.aws_iam_policy_document.pod_trust.statement).actions == toset(["sts:AssumeRole", "sts:TagSession"]) &&
+      one(one(data.aws_iam_policy_document.pod_trust.statement).principals).identifiers == toset(["pods.eks.amazonaws.com"]) &&
+      one(one(data.aws_iam_policy_document.pod_trust.statement).principals).type == "Service" &&
+      one(one(data.aws_iam_policy_document.pod_trust.statement).condition).variable == "aws:SourceAccount" &&
+      one(one(data.aws_iam_policy_document.pod_trust.statement).condition).test == "StringEquals" &&
+      one(one(data.aws_iam_policy_document.pod_trust.statement).condition).values == tolist(["123456789012"])
+    )
+    error_message = "Storage Pod Identity trust uses the EKS pods service principal and current SourceAccount."
+  }
+}
+run "partial_storage_role_reuse_preserves_policy_ownership" {
+  command = plan
+  variables {
+    existing_role_arns = { tempo = "arn:aws:iam::123456789012:role/existing-tempo" }
+  }
+  assert {
+    condition = (
+      toset(keys(aws_iam_role.storage)) == toset(["mimir", "flink"]) &&
+      toset(keys(aws_iam_role_policy.storage)) == toset(["mimir", "flink"]) &&
+      toset(keys(aws_eks_pod_identity_association.storage)) == toset(["mimir", "tempo", "flink"]) &&
+      aws_eks_pod_identity_association.storage["tempo"].role_arn == var.existing_role_arns.tempo &&
+      contains(keys(output.required_role_policies), "tempo")
+    )
+    error_message = "Partial reuse must leave the supplied role and policies external while retaining its exact association and a reviewable required policy document."
   }
 }
 run "reuse_roles_without_policy_mutation" {
@@ -59,8 +147,8 @@ run "externally_owned_associations" {
     }
   }
   assert {
-    condition     = length(aws_eks_pod_identity_association.storage) == 0
-    error_message = "Externally owned associations must not be managed."
+    condition     = length(aws_eks_pod_identity_association.storage) == 0 && length(aws_iam_role.storage) == 0 && length(aws_iam_role_policy.storage) == 0
+    error_message = "Externally owned associations, supplied roles and policies must not be managed."
   }
 }
 run "reject_disconnected_generated_roles" {
