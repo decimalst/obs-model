@@ -21,8 +21,7 @@ def main():
     render()
     values = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
     partitions = values["scaling"]["logPartitions"]
-    with ClickHouseCluster(replicas=1) as cluster:
-        cluster.chi["spec"]["configuration"]["profiles"]["default/insert_quorum"] = 1
+    with ClickHouseCluster(replicas=1, insert_quorum=1) as cluster:
         cluster.grow(2)
         kafka_env = {
             "KAFKA_NODE_ID": "1",

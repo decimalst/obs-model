@@ -21,6 +21,11 @@ export const operators = [
   "metrics-server",
   "keda",
 ];
+const startupGateDefaults = Object.freeze({
+  attempts: 120,
+  delaySeconds: 5,
+  timeoutSeconds: 20,
+});
 export const defaults = Object.freeze({
   version: 1,
   mode: "new",
@@ -42,6 +47,7 @@ export const defaults = Object.freeze({
   logPartitions: 36,
   writerMax: 12,
   clickhouseShards: 2,
+  startupGates: startupGateDefaults,
   existing: null,
   ...policyDefaults,
   ...operationsDefaults,
@@ -116,8 +122,26 @@ export function validateRequest(r) {
     ...structuredClone(policyDefaults),
     ...structuredClone(operationsDefaults),
     ...structuredClone(iamDefaults),
+    startupGates: structuredClone(startupGateDefaults),
     ...r,
   };
+  insist(
+    r.startupGates &&
+      typeof r.startupGates === "object" &&
+      !Array.isArray(r.startupGates),
+    "Startup gates must be an object",
+  );
+  insist(
+    Object.keys(r.startupGates).every((k) =>
+      Object.hasOwn(startupGateDefaults, k),
+    ),
+    "Unknown startup gate field; use attempts, delaySeconds or timeoutSeconds",
+  );
+  // Partial tuning imports retain omitted defaults, without mutating the input.
+  r.startupGates = { ...startupGateDefaults, ...r.startupGates };
+  bounded(r.startupGates.attempts, 1, 360, "Startup attempts");
+  bounded(r.startupGates.delaySeconds, 1, 30, "Startup retry delay");
+  bounded(r.startupGates.timeoutSeconds, 5, 60, "Startup request timeout");
   insist(r.version === 1, "Unsupported configuration version");
   insist(["new", "existing"].includes(r.mode), "Choose new or existing EKS");
   insist(
@@ -329,6 +353,7 @@ export function validateExistingCoordinates(e) {
 }
 export function tuning(r) {
   return {
+    startupGates: structuredClone(r.startupGates),
     quota: {
       eventsPerSecond: r.logEventsPerSecond,
       eventBurst: r.logEventsPerSecond * 2,
@@ -430,6 +455,7 @@ Use a real published image digest. This command renders locally and does not con
 - Observed service graph: ${r.serviceGraph.enabled ? "enabled with an explicit bounded service-name list" : "disabled"}. Graphs use client/server spans before tail sampling; incomplete SDK instrumentation produces incomplete graphs. Keep names unique within the cell and drain samplers before membership changes.
 - CPU profiling: ${r.profiling ? "enabled; privileged node collection requires reviewed namespaces/workload labels and kernel/storage acceptance" : "disabled"}.
 - Hubble: ${r.hubble ? "enabled using externally managed Cilium; qualify networking ownership first" : "disabled"}.
+- Startup dependencies: ${r.startupGates.attempts} attempts, ${r.startupGates.delaySeconds}-second retry delay and ${r.startupGates.timeoutSeconds}-second request timeout per init-container invocation. Gateways wait for Kafka topic/ISR readiness, writers for all-replica ClickHouse schema, and quota admission for the active gateway. Exhausted checks fail closed; Kubernetes may restart the init container. These are not a total deployment deadline or proof of stored-signal delivery. Keep the supported installer/GitOps hook ordering; see docs/startup-gates.md.
 
 ${r.isolation.enabled || r.qualification ? "Read OPERATIONS.md for the selected cell/recovery plan, required owner inputs and deferred qualification commands." : "Cell plans and qualification drafts were not selected. Use docs/isolation.md and docs/live-qualification.md to prepare them later."}
 

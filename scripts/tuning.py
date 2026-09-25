@@ -12,6 +12,7 @@ DEFAULTS = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
 SCHEMA = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
 # Keep identity, topology, endpoint, image, and credential overrides out of tuning.
 ALLOWED = {
+    "startupGates": {key: None for key in DEFAULTS["startupGates"]},
     "privacy": {
         kind: {key: None for key in fields} for kind, fields in DEFAULTS["privacy"].items()
     },

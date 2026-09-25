@@ -1,0 +1,5 @@
+<config>
+  <user>writer</user>
+  <password from_env="CLICKHOUSE_PASSWORD"/>
+  <history_file>/tmp/clickhouse-client-history</history_file>
+</config>

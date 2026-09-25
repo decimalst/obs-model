@@ -213,6 +213,7 @@ test("ZIP output supports Unicode content", () => {
 test("older requests receive explicit advanced defaults and full requests round-trip without drift", () => {
   const old = good();
   for (const key of [
+    "startupGates",
     "securityProfile",
     "privacy",
     "serviceGraph",
@@ -224,6 +225,7 @@ test("older requests receive explicit advanced defaults and full requests round-
   const first = compileRequest(old);
   const resumed = JSON.parse(first["deployment-request.json"]);
   assert.deepEqual(resumed.privacy, defaults.privacy);
+  assert.deepEqual(resumed.startupGates, defaults.startupGates);
   assert.deepEqual(resumed.iam, defaults.iam);
   assert.deepEqual(compileRequest(resumed), first);
   assert.equal(Object.hasOwn(old, "privacy"), false);

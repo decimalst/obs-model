@@ -2,7 +2,7 @@
 
 Use `terraform/live/lab` for an explicitly authorized live test. It wraps the production regional module, keeps three AZs, six initial on-demand nodes and retained storage, and adds a private SSM runner and a private artifact bucket/ECR repository. It is separate from the offline qualification recorder. This procedure incurs AWS charges and deletes only the new lab's disposable data.
 
-The first pass proves deployment, service-account credentials, actual stored signals, bounded noisy-neighbor behavior and teardown. It does not establish complete DR, production SSO, AZ-loss tolerance or every gate in [live qualification](live-qualification.md). A small isolated Grafana database restore can be added after deployment succeeds; full distributed-backend recovery follows [the recovery runbook](recovery.md) in another reviewed window if necessary.
+The first pass targets deployment, service-account credentials, actual stored signals, bounded noisy-neighbor behavior and verified teardown. Each result must be recorded separately; completing an installation is not a teardown result. This procedure does not establish complete DR, production SSO, AZ-loss tolerance or every gate in [live qualification](live-qualification.md). A small isolated Grafana database restore can be added after deployment succeeds; full distributed-backend recovery follows [the recovery runbook](recovery.md) in another reviewed window if necessary. The bounded 2026-09-25 results are recorded below and in [the validation record](validation.md#2026-09-25-authorized-disposable-aws-deployment).
 
 ## Prerequisites before creating resources
 
@@ -30,7 +30,7 @@ Price sources: [Ohio EC2, EBS and NAT offer](https://pricing.us-east-1.amazonaws
 3. Build the quota service for **linux/amd64**, push it to the lab's immutable ECR repository and resolve its registry digest. The locally tested arm64 image ID is not a deployable amd64 registry digest. Use the immutable digest in installation values.
 4. Build a nonsecret source bundle from explicitly selected scripts, charts, integrations, pinned Python requirements and the platform contract. Do not archive the repository root, `.git`, AWS profiles, Terraform state, plans, environment files or credential-bearing values. Store its SHA-256 digest and upload only to the private lab artifact bucket.
 5. Run `scripts/lab_runner_bootstrap.sh` on the exact runner via SSM with account, region, cluster, artifact bucket and bundle hash. It verifies identity and the bundle, installs checksum-pinned Helm/kubectl and Python requirements, uses `helm_dependencies.py` to register the selected HTTPS repositories and build platform/operator dependencies from their committed chart locks, and creates a private dedicated kubeconfig. Existing matching repository aliases are reused; foreign aliases are never overwritten. This dependency preparation works with an empty Helm configuration/cache and is required before the first render: tracked-source archives omit ignored chart packages. It does not deploy. Keep `KUBECONFIG=/opt/CLUSTER/kubeconfig` explicit in every subsequent runner command.
-6. Run `install.py --render-only`, then `--check-only`, then the installer with the same configuration and immutable image. The installer orders CRDs/controllers before platform resources. Wait for actual Kafka/ClickHouse reconciliation, all expected replicas and encrypted three-AZ volume placement. Reapply the same configuration and inspect convergence without replacements or unexpected changes.
+6. Run `install.py --render-only`, then `--check-only`, then the installer with the same configuration and immutable image. The installer orders CRDs/controllers before platform resources. Wait for actual Kafka/ClickHouse reconciliation, all expected replicas and encrypted three-AZ volume placement. Preserve the platform's supported Helm hook sequencing described in [startup gates](startup-gates.md): waiting for initialized writers before the post-install schema hook would deadlock. Reapply the same configuration and inspect convergence without replacements or unexpected changes.
 7. Enable the [stored-signal canary](support.md) using synthetic traffic, the explicit collection namespace label and a separately generated read-only ClickHouse credential. Confirm fresh exact logs in ClickHouse, metrics in Mimir and traces in Tempo. Readiness alone is insufficient. Verify Pod Identity access succeeds for assigned buckets and fails for an unrelated lab-owned test target.
 8. Exercise one noisy logging service alongside a quiet service and verify that ERROR traffic spends its budget; test expiring debug collection and configured cardinality rejection. Observe Kafka consumer lag, stable consumer group, bounded KEDA scaling, ClickHouse write shards and catch-up. Keep these tests inside the chosen traffic/time ceilings; collect success and failure evidence without secrets.
 9. Optionally take a Grafana RDS snapshot, restore into a distinct lab database, and verify a known synthetic row/query before deleting the restored database and snapshot. A database restore does not qualify ClickHouse, Kafka, Mimir, Tempo or profile recovery. Leave all unexecuted qualification gates pending.
@@ -46,6 +46,47 @@ After enabling the canary, run the explicit live helper from the private runner:
 ```
 
 The default mode is read-only and requires two fresh completed canary cycles from both support replicas. For the bounded noisy-neighbor test, deploy an explicit lab tuning override of `quota.eventsPerSecond: 20`, `eventBurst: 40`, `debugEventsPerSecond: 5`, and `debugEventBurst: 10` before the initial install, then append `--noisy-neighbor`. This creates three short-lived producer pods: 3,000 total ERROR messages from one service and 30 INFO messages from a separate quiet service. It verifies distinct stored quiet markers, limited stored flood markers, quota drops without unavailability, and fresh canaries afterward; its `finally` block deletes only the test Jobs using their exact UIDs. The output file must be new. Production defaults are unchanged. These successful subchecks still leave partial-ingestion rejection, failover and full qualification pending; aggregate quota counters are not exact per-service accounting.
+
+For a separate shared-service burst check, run:
+
+```sh
+.venv/bin/python scripts/lab_shared_quota.py \
+  --context "$lab_cluster" --cluster "$lab_cluster" \
+  --account "$lab_account" --region "$lab_region" \
+  --confirm-cluster-arn "arn:aws:eks:$lab_region:$lab_account:cluster/$lab_cluster" \
+  --output build/lab-shared-quota.json --timeout 300
+```
+
+This emits 100 normalized ERROR records directly to each of exactly three stable active quota replicas using one fresh synthetic service and no retry. It deliberately bypasses node-agent collection and supplements the end-to-end neighbor test. All replicas must have the reviewed 20 EPS / 40-event burst, and each byte burst must be at least 307,200 bytes so a byte limit cannot conceal an event-quota defect. The helper measures the complete concurrent request window, requires all three HTTP 200 responses and a global bound below three independent 40-event bursts, then verifies that every accepted distinct marker reaches ClickHouse and remains stable for 20 seconds. It reads mounted ClickHouse credentials only inside the existing support pod; it does not read the Secret API or print response bodies.
+
+Aggregate admission counters must be isolated from other traffic during this measurement. Background traffic, a slow request window, changing replica membership, a failed request or partial durable delivery makes the check inconclusive or failed; do not relax the assertions to obtain a pass. The helper does not pause agents automatically. If a disposable lab needs a short collection pause, explicitly bound that maintenance window, record the exact affected agents, arrange restoration even on failure, and require all agents plus fresh complete canary cycles afterward. Do not copy that pause into production as an automatic test step.
+
+For a narrow Pod Identity allow/deny probe, use the exact recorded `LabRun` tag and this lab's known buckets:
+
+```sh
+.venv/bin/python scripts/lab_pod_identity.py \
+  --context "$lab_cluster" --cluster "$lab_cluster" \
+  --account "$lab_account" --region "$lab_region" \
+  --confirm-cluster-arn "arn:aws:eks:$lab_region:$lab_account:cluster/$lab_cluster" \
+  --lab-run "$lab_run" \
+  --allowed-bucket "${lab_cluster}-${lab_account}-${lab_region}-mimir-blocks" \
+  --denied-bucket "${lab_cluster}-${lab_account}-${lab_region}-artifacts" \
+  --output build/lab-pod-identity.json --timeout 180 --run-probe
+```
+
+The explicit `--run-probe` creates a bounded temporary Job using the existing Mimir service account and deletes that exact Job afterward. It proves credential delivery and `ListBucket` HTTP 200/403 for the assigned/unrelated lab buckets; it does not create IAM roles, read object contents, test object writes or audit all effective permissions. Credentials, projected tokens, signed headers and response bodies are never part of the report. Confirm `jobsCleanedUp: true`; a successful permission check does not excuse failed cleanup.
+
+All three helpers require explicit account/region/context/cluster-ARN agreement and a private EKS endpoint. They save new private aggregate files and deliberately leave `qualificationGatePassed: false`. Retain each result with the source revision, actual chart/image digests, selected tuning and reviewed configuration used for that run. The separate [qualification recorder](live-qualification.md) stores operator attestations; it does not execute these probes or independently verify their claims. Never upload raw state, plans, tfvars, Secrets, pod specifications or logs as evidence.
+
+## 2026-09-25 executed lab
+
+The first disposable run applied 121 Terraform resources and reached a no-change plan. Six `m7i.xlarge` workers ran across three AZs. The live ClickHouse layout had two write shards with three AZ-separated replicas each; the same flood service stored 171 records on one shard and 192 on the other.
+
+The node-agent noisy-neighbor test offered 3,000 ERROR records and stored 363 distinct records, while the quiet service stored all 30 of its 30 offered INFO records. Both canary replicas completed fresh exact logs, metrics and traces before and after. A first direct shared-quota measurement was inconclusive because of background counters. A separate approximately 73-second pause of only the six lab Vector agents isolated the burst: 300 offered, 40 admitted, 260 dropped, 40 stored, no unavailability, and a 0.222171-second request window against a conservative global bound of 46. All six agents were restored and fresh complete signals verified again. The Mimir service-account probe returned 200 for its assigned bucket and 403 for the unrelated artifact bucket, then removed its Job. All eight rollout active/preview Service hashes and endpoint selections were verified after the Helm 4 client-side-apply correction; a real promotion was not attempted.
+
+Bootstrap did lose synthetic logs before Kafka topic and ClickHouse schema creation. The new startup gates passed local native Kafka/ClickHouse tests after this finding; **a new cold AWS installation with those gates remains pending**. Later canary success does not recover those earlier drops. This run did not perform DR, AZ/region fault injection, real rollout promotion, induced-lag autoscaling or full IAM/security qualification. See the [validation record](validation.md#2026-09-25-authorized-disposable-aws-deployment) for exact evidence hashes and limitations.
+
+**Teardown completed at 17:58:22 UTC.** All 26 inventoried CSI data volumes totaling 1,156 GiB were deleted, and Terraform destruction removed all 121 managed resources. Independent AWS inventory found no remaining lab cluster, active instances, EBS volumes, EC2/RDS/cache snapshots, retained database backups, EIPs, NAT gateways, interfaces, VPC, load balancers, databases, caches, buckets, ECR repositories, log groups, IAM roles/policies or Secrets. The final RDS snapshot and disposable quota Secret were explicitly removed; the automated snapshot also disappeared. The dedicated bootstrap state bucket and all historical state/lock versions were deleted last after empty remote state was preserved locally. Existing SSO and AWS service-linked roles were preserved. The run lasted approximately 102 minutes and is expected to remain below the $100 target on the planning estimate; actual billing has not been verified. The approximately $1.79/hour baseline excludes the runner and variable usage.
 
 ## Teardown is a required test result
 

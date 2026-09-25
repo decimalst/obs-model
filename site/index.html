@@ -551,10 +551,12 @@
               <fieldset data-page="5" hidden>
                 <legend>Plan operations before rollout.</legend>
                 <p class="hint">
-                  Create reviewable isolation and recovery plans, then keep live
-                  validation in one deferred batch. These choices do not create
-                  backups, infrastructure or passing evidence.
+                  Set bounded waits for pipeline dependencies, then prepare
+                  isolation, recovery and deferred validation plans. Planning
+                  selections do not create backups, infrastructure or passing
+                  evidence.
                 </p>
+                <div id="startup-controls"></div>
                 <div id="isolation-controls"></div>
                 <div id="qualification-controls"></div>
               </fieldset>

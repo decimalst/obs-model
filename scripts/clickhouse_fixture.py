@@ -29,7 +29,12 @@ def wait(probe, message, seconds=90):
 
 
 class ClickHouseCluster:
-    def __init__(self, replicas=3):
+    def __init__(self, replicas=3, insert_quorum=None):
+        if insert_quorum is not None and (
+            type(insert_quorum) is not int or not 1 <= insert_quorum <= replicas
+        ):
+            raise ValueError("fixture insert_quorum must be an integer within its replica count")
+        self.insert_quorum = insert_quorum
         self.prefix = "olly-shards-" + uuid.uuid4().hex[:8]
         self.directory = ROOT / "build" / self.prefix
         self.directory.mkdir(parents=True)
@@ -38,11 +43,18 @@ class ClickHouseCluster:
         self.nodes = {}
         self.containers = []
         self.values = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
+        self.load_chi((ROOT / "build/platform.yaml").read_text())
+
+    def load_chi(self, rendered):
         self.chi = next(
-            d
-            for d in yaml.safe_load_all((ROOT / "build/platform.yaml").read_text())
-            if d and d["kind"] == "ClickHouseInstallation"
+            d for d in yaml.safe_load_all(rendered) if d and d["kind"] == "ClickHouseInstallation"
         )
+        # Reduced-replica fixtures opt in explicitly; normal fixtures retain the
+        # production profile verbatim. Reapply only this override after growth.
+        if self.insert_quorum is not None:
+            self.chi["spec"]["configuration"]["profiles"]["default/insert_quorum"] = (
+                self.insert_quorum
+            )
 
     def run(self, name, image, *options):
         result = command(
@@ -149,9 +161,7 @@ class ClickHouseCluster:
                 f"clickhouse.shards={shards}",
             ]
         )
-        self.chi = next(
-            d for d in yaml.safe_load_all(rendered) if d and d["kind"] == "ClickHouseInstallation"
-        )
+        self.load_chi(rendered)
         for s in range(shards):
             for r in range(self.replicas):
                 directory = self.directory / f"ch-{s}-{r}"

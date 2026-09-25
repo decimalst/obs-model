@@ -52,6 +52,7 @@ $$("[data-open-service]").forEach((e) =>
 );
 // All advanced controls edit structured state; imports keep optional fields intact.
 const advancedKeys = [
+  "startupGates",
   "securityProfile",
   "privacy",
   "serviceGraph",
@@ -397,6 +398,38 @@ function updateIAMSummary() {
   }
 }
 function buildAdvanced() {
+  const startup = group(
+    $("#startup-controls"),
+    "Wait for pipeline dependencies",
+    "Before log admission and consumption start, gateways wait for Kafka topic readiness, writers wait for ClickHouse schema on every replica, and quota admission waits for the active gateway. Exhausted checks keep the workload blocked; Kubernetes may restart the check. These bounds apply to each init-container invocation, not the whole deployment.",
+  );
+  const startupFields = grid(startup);
+  field(startupFields, "startupGates.attempts", "Maximum check attempts", {
+    type: "number",
+    min: 1,
+    max: 360,
+    step: 1,
+    help: "1–360 attempts; default 120. Increasing this cannot repair a missing topic or schema.",
+  });
+  field(startupFields, "startupGates.delaySeconds", "Retry delay (seconds)", {
+    type: "number",
+    min: 1,
+    max: 30,
+    step: 1,
+    help: "1–30 seconds between failed checks; default 5.",
+  });
+  field(
+    startupFields,
+    "startupGates.timeoutSeconds",
+    "Request timeout (seconds)",
+    {
+      type: "number",
+      min: 5,
+      max: 60,
+      step: 1,
+      help: "5–60 seconds per request; default 20. Kafka and ClickHouse clients have a further 5-second forced-termination grace period.",
+    },
+  );
   const privacy = $("#privacy-controls");
   const logs = group(
     privacy,

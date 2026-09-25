@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import jsonschema
 import yaml
 
 from scripts.build_site import FILES, build
@@ -66,11 +67,45 @@ class AdvancedStudio(unittest.TestCase):
     def test_default_privacy_and_graph_policy_match_backend(self):
         files = compiler()
         tuning = validate_tuning(json.loads(files["tuning.json"]))
-        for field in ("privacy", "serviceGraph"):
+        for field in ("privacy", "serviceGraph", "startupGates"):
             self.assertEqual(tuning[field], DEFAULTS[field])
         self.assertNotIn("security-profile.json", files)
         self.assertNotIn("qualification.json", files)
         self.assertIn("--render-only", files["README.md"])
+
+    def test_startup_gate_bounds_and_partial_imports_match_installer_and_chart(self):
+        schema = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
+        gate_schema = schema["properties"]["startupGates"]
+        selections = [{}, {"attempts": 7}]
+        for key, spec in gate_schema["properties"].items():
+            selections.extend({key: spec[bound]} for bound in ("minimum", "maximum"))
+        for selected in selections:
+            with self.subTest(selected=selected):
+                expected = {**DEFAULTS["startupGates"], **selected}
+                files = compiler({**existing(), "startupGates": selected})
+                request = json.loads(files["deployment-request.json"])
+                tuning = json.loads(files["tuning.json"])
+                self.assertEqual(request["startupGates"], expected)
+                self.assertEqual(tuning["startupGates"], expected)
+                self.assertEqual(validate_tuning(tuning)["startupGates"], expected)
+                jsonschema.validate(tuning["startupGates"], gate_schema)
+                platform = validate_platform(json.loads(files["platform.json"]))
+                generated = values(platform, "example/quota@sha256:" + "a" * 64)
+                self.assertEqual(generated["startupGates"], expected)
+
+    def test_startup_gate_rejection_matches_installer_contract(self):
+        schema = json.loads((ROOT / "charts/platform/values.schema.json").read_text())
+        invalid = [None, [], False, {"enabled": False}, {"attempts": True}]
+        for key, spec in schema["properties"]["startupGates"]["properties"].items():
+            invalid.extend(
+                {key: value} for value in (spec["minimum"] - 1, spec["maximum"] + 1, 1.5, "5")
+            )
+        for selected in invalid:
+            with self.subTest(selected=selected):
+                with self.assertRaises(ValueError):
+                    compiler({"startupGates": selected})
+                with self.assertRaises(ValueError):
+                    validate_tuning({"startupGates": selected})
 
     def test_all_security_profiles_compile_to_installer_contracts(self):
         for path in ROOT.glob("examples/security-*.yaml"):

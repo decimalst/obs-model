@@ -53,6 +53,9 @@ runtime-test:
 .PHONY: mimir-startup-test
 mimir-startup-test:
 	$(PYTHON) scripts/mimir_startup_test.py
+.PHONY: startup-gate-test
+startup-gate-test:
+	$(PYTHON) scripts/startup_gate_test.py
 image:
 	docker build -t observability/log-quota:0.1.0 services/log-quota
 .PHONY: integration-test

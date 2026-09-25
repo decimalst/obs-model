@@ -3,6 +3,7 @@ clusterName: olly-us-east-1
 storageClass: gp3-encrypted
 createStorageClass: true
 images:
+  kafkaCli: apache/kafka:4.2.1
   kafkaExporter: quay.io/strimzi/kafka:1.2.0-kafka-4.3.1@sha256:fef34b5438e8556cc08c01f3e254e47346f061b53a4e38d4289853777e0ea7f1
   vector: timberio/vector:0.54.0-debian
   otel: otel/opentelemetry-collector-contrib:0.148.0
@@ -10,6 +11,10 @@ images:
   clickhouse: clickhouse/clickhouse-server:25.8.33.6
   keeper: clickhouse/clickhouse-keeper:25.8.33.6
   curl: curlimages/curl:8.18.0
+startupGates:
+  attempts: 120
+  delaySeconds: 5
+  timeoutSeconds: 20
 quota:
   replicas: 3
   redisAddress: quota.example.cache.amazonaws.com:6379

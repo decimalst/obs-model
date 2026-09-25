@@ -22,6 +22,8 @@ Build a regional AWS observability platform from the architecture in docs/archit
 
 - Kafka consumer changes require `make consumer-test`. Keep one stable consumer group, acknowledge only after storage completion, cap consumer scaling at partition count, and never run a CPU HPA alongside KEDA for the same target. Pause KEDA with database maintenance. Partition increases are reviewed changes; decreases require a separate data migration.
 
+- Log startup gates require `make startup-gate-test`. Preserve the no-wait platform Helm/Flux path so the post-install schema hook can release waiting writers. Init checks must never create topics or schema, expose credentials, or be described as continuous backend health or guaranteed losslessness.
+
 - Span-derived RED must branch before tail sampling, count only configured span kinds, bound dimensions/resource caches, and keep independent metric writers. Do not mutate the original trace stream or claim SDK-sampled/dropped telemetry is complete request accounting. Run `make red-test rules-test dashboard-test` for relevant RED and dashboard changes; verify emitted names/units and aggregate histogram buckets before quantiles.
 
 - Cilium is owned by the cluster networking release. Never install, adopt, replace or disable a CNI through the observability installer. CPU profiling is a separate explicit privileged opt-in; preserve node/namespace/workload selection and regional profile storage. Pyroscope v2 retention uses limits.retention_period, not v1 compactor retention. Run make profiling-test for profiling/Hubble changes.

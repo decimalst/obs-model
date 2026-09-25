@@ -7,7 +7,8 @@
     "quota",
     "logs",
     "collectors",
-    "images"
+    "images",
+    "startupGates"
   ],
   "properties": {
     "region": {
@@ -27,7 +28,8 @@
       "required": [
         "vector",
         "otel",
-        "quota"
+        "quota",
+        "kafkaCli"
       ],
       "additionalProperties": {
         "type": "string",
@@ -1186,6 +1188,32 @@
         "cacheLoopSeconds",
         "histogramBucketsSeconds"
       ]
+    },
+    "startupGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempts",
+        "delaySeconds",
+        "timeoutSeconds"
+      ],
+      "properties": {
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 360
+        },
+        "delaySeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 5,
+          "maximum": 60
+        }
+      }
     }
   },
   "definitions": {

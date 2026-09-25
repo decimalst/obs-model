@@ -3,6 +3,7 @@
 {{- $otel := hasPrefix "otel-" $name }}
 {{- $sampler := eq $name "otel-traces" }}
 {{- $writer := eq $name "vector-writer" }}
+{{- $startup := or $vector (eq $name "log-quota") }}
 {{- $resources := $.Values.resources.gateways }}
 {{- if $sampler }}{{- $resources = $.Values.resources.samplers }}{{- else if $writer }}{{- $resources = $.Values.resources.writers }}{{- else if eq $name "log-quota" }}{{- $resources = $.Values.resources.quota }}{{- end }}
 {{- $bluegreen := and $.Values.rollouts.enabled (not (or $sampler $writer)) }}
@@ -48,6 +49,9 @@ spec:
         app: {{ $name }}
         {{- include "olly.labels" $ | nindent 8 }}
       annotations:
+        {{- if $startup }}
+        checksum/startup-gates: {{ include (print $.Template.BasePath "/startup-gates.yaml") $ | sha256sum }}
+        {{- end }}
         checksum/config: {{ if $otel }}{{ include (print $.Template.BasePath "/otel-config.yaml") $ | sha256sum }}{{ else if $vector }}{{ include (print $.Template.BasePath "/vector-config.yaml") $ | sha256sum }}{{ else }}{{ $.Values.quota | toJson | sha256sum }}{{ end }}
         prometheus.io/scrape: "true"
         prometheus.io/port: {{ if $otel }}"8888"{{ else if $vector }}"9090"{{ else }}"8080"{{ end }}
@@ -62,6 +66,40 @@ spec:
       securityContext:
         {{- include "olly.security" $ | nindent 8 }}
       {{- include "olly.spread" $name | nindent 6 }}
+      {{- if $startup }}
+      initContainers:
+        - name: wait-log-backend
+          image: {{ if eq $name "vector-gateway" }}{{ $.Values.images.kafkaCli }}{{ else if $writer }}{{ $.Values.images.clickhouse }}{{ else }}{{ $.Values.support.image }}{{ end }}
+          {{- if eq $name "log-quota" }}
+          command: [python, -B, /startup/wait-gateway.py]
+          {{- else }}
+          command: [/bin/bash, /startup/wait-backend.sh, {{ if $writer }}schema{{ else }}kafka{{ end }}]
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          env:
+            - {name: GATE_ATTEMPTS, value: {{ $.Values.startupGates.attempts | quote }}}
+            - {name: GATE_DELAY_SECONDS, value: {{ $.Values.startupGates.delaySeconds | quote }}}
+            - {name: GATE_TIMEOUT_SECONDS, value: {{ $.Values.startupGates.timeoutSeconds | quote }}}
+            {{- if eq $name "vector-gateway" }}
+            - {name: EXPECTED_PARTITIONS, value: {{ $.Values.scaling.logPartitions | quote }}}
+            - {name: KAFKA_HEAP_OPTS, value: "-Xms32m -Xmx128m"}
+            - {name: KAFKA_OPTS, value: "-Djava.io.tmpdir=/tmp -Dkafka.logs.dir=/tmp"}
+            {{- else if $writer }}
+            - {name: EXPECTED_REPLICAS, value: {{ mul $.Values.clickhouse.shards $.Values.clickhouse.replicas | quote }}}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.logs.secretName }}, key: password}
+            {{- end }}
+          volumeMounts:
+            - {name: startup-gates, mountPath: /startup, readOnly: true}
+            - {name: startup-tmp, mountPath: /tmp}
+      {{- end }}
       containers:
         - name: {{ $name }}
           image: {{ if $otel }}{{ $.Values.images.otel }}{{ else if $vector }}{{ $.Values.images.vector }}{{ else }}{{ $.Values.images.quota }}{{ end }}
@@ -123,10 +161,18 @@ spec:
             - {name: data, mountPath: /var/lib/vector}
             {{- end }}
           {{- end }}
-      {{- if or $otel $vector }}
+      {{- if or $otel $vector $startup }}
       volumes:
+        {{- if $startup }}
+        - name: startup-gates
+          configMap: {name: log-startup-gates}
+        - name: startup-tmp
+          emptyDir: {sizeLimit: 64Mi}
+        {{- end }}
+        {{- if or $otel $vector }}
         - name: config
           configMap: {name: {{ $name }}}
+        {{- end }}
         {{- if $vector }}
         - name: data
           emptyDir: {sizeLimit: 1Gi}

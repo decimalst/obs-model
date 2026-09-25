@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
 
 import jsonschema
 import yaml
@@ -105,6 +106,52 @@ class Sharding(unittest.TestCase):
         self.assertIn("count() != 6", job["spec"]["template"]["spec"]["containers"][0]["args"][0])
         gateway = yaml.safe_load(d["ConfigMap", "vector-gateway"]["data"]["vector.yaml"])
         self.assertEqual(gateway["sinks"]["kafka"]["key_field"], "event_id")
+
+    def test_fixture_quorum_override_survives_fresh_growth_renders(self):
+        rendered = {
+            count: yaml.safe_dump(self.resources(count)["ClickHouseInstallation", "observability"])
+            for count in [2, 3]
+        }
+        for quorum, replicas, expected in [(None, 3, 2), (1, 1, 1)]:
+            with self.subTest(quorum=quorum), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "charts/platform").mkdir(parents=True)
+                (root / "charts/platform/values.yaml").write_text(
+                    "images:\n  clickhouse: fixture-image\n"
+                )
+                (root / "build/configs/clickhouse-schema").mkdir(parents=True)
+                (root / "build/configs/clickhouse-schema/schema.sql").write_text("SELECT 1")
+                (root / "build/platform.yaml").write_text(rendered[2])
+                with (
+                    patch("scripts.clickhouse_fixture.ROOT", root),
+                    patch("scripts.clickhouse_fixture.command", side_effect=rendered.values()),
+                    patch("scripts.clickhouse_fixture.wait"),
+                    patch.object(ClickHouseCluster, "run", return_value="fixture-container"),
+                    patch.object(ClickHouseCluster, "sql"),
+                ):
+                    cluster = ClickHouseCluster(replicas=replicas, insert_quorum=quorum)
+                    self.assertEqual(
+                        cluster.chi["spec"]["configuration"]["profiles"]["default/insert_quorum"],
+                        expected,
+                    )
+                    for count in [2, 3]:
+                        cluster.grow(count)
+                        self.assertEqual(
+                            cluster.chi["spec"]["configuration"]["profiles"][
+                                "default/insert_quorum"
+                            ],
+                            expected,
+                        )
+                        for profile in cluster.directory.glob("ch-*/profiles.xml"):
+                            self.assertEqual(
+                                ET.parse(profile).findtext("profiles/default/insert_quorum"),
+                                str(expected),
+                            )
+
+    def test_fixture_quorum_override_rejects_impossible_values(self):
+        for value in [0, -1, 4, True, "1", 1.5]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ClickHouseCluster(replicas=3, insert_quorum=value)
 
     def test_unsafe_topology_and_shrink_are_rejected(self):
         for candidate in [{"clickhouse": {"shards": 1}}, {"clickhouse": {"shards": 33}}]:
