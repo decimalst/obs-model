@@ -4,9 +4,11 @@ import subprocess
 import time
 import uuid
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import yaml
-from render import ROOT
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def command(args, **kwargs):
@@ -113,7 +115,11 @@ class ClickHouseCluster:
         ET.SubElement(remote, "secret").text = "fixture-cluster-secret"
         for s in range(self.shards):
             group = ET.SubElement(remote, "shard")
-            ET.SubElement(group, "internal_replication").text = "true"
+            # Altinity 0.27.3 writes StringBool.String() verbatim to this XML
+            # element. Do not normalize unsupported server tokens in fixtures.
+            ET.SubElement(group, "internal_replication").text = self.chi["spec"]["configuration"][
+                "clusters"
+            ][0]["layout"]["shards"][s]["internalReplication"]
             for r in range(self.replicas):
                 copy = ET.SubElement(group, "replica")
                 ET.SubElement(copy, "host").text = f"ch-{s}-{r}"
@@ -130,6 +136,22 @@ class ClickHouseCluster:
     def grow(self, shards):
         assert shards > self.shards
         self.shards = shards
+        # Expansion must exercise the actual newly rendered shard settings too.
+        rendered = command(
+            [
+                "helm",
+                "template",
+                "olly",
+                str(ROOT / "charts/platform"),
+                "-n",
+                "observability",
+                "--set",
+                f"clickhouse.shards={shards}",
+            ]
+        )
+        self.chi = next(
+            d for d in yaml.safe_load_all(rendered) if d and d["kind"] == "ClickHouseInstallation"
+        )
         for s in range(shards):
             for r in range(self.replicas):
                 directory = self.directory / f"ch-{s}-{r}"

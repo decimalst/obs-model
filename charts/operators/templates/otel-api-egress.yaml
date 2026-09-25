@@ -1,0 +1,33 @@
+{{- if index .Values.components "opentelemetry-operator" }}
+{{- $operator := index .Subcharts "opentelemetry-operator" }}
+# Additive to the operator-created policy; that policy's endpoint /32s do not
+# cover every CNI's service-DNAT path and are not refreshed on endpoint rotation.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "opentelemetry-operator.fullname" $operator }}-api-egress
+  namespace: {{ include "opentelemetry-operator.namespace" $operator }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "opentelemetry-operator.selectorLabels" $operator | nindent 6 }}
+      app.kubernetes.io/component: controller-manager
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Egress]
+  egress:
+    # Match the platform's HTTPS egress pattern without assuming a service CIDR
+    # or persisting control-plane IPs that EKS may replace.
+    - to:
+        - ipBlock: {cidr: 0.0.0.0/0}
+      ports:
+        - {protocol: TCP, port: 443}
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+      ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+{{- end }}

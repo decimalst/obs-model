@@ -159,3 +159,9 @@ Added a dedicated AWS IAM step separating Terraform execution, the existing EKS 
 | Browser layout and final controls | Pass: desktop review and 390px mobile role-policy inspection without page overflow; step navigation focuses the legend; no browser error/warning messages during final interaction. Final mode-notice/copy changes reran `make studio-test` and direct browser checks. |
 
 The public build contains only the static allowlist, now including `iam.mjs`. Tests used synthetic identities and verify declared policies and generated artifacts, not effective AWS authorization. Live STS/Pod Identity credential delivery, policy evaluation including SCPs/permission boundaries, KMS behavior, S3 operations, private EKS connectivity and service-linked-role creation remain in the deferred AWS qualification batch. No cloud resources, identity grants, deployments, external notifications or publication occurred. Pipeline behavior was unchanged; the broader sharding/consumer, RED/rules, eBPF, security and support integration fixtures were not rerun in this IAM increment.
+
+## 2026-09-25: Mimir locality limitation identified
+
+Static review of the pinned Mimir 6.2.0 Helm chart found that ingester Kafka rack hints use logical rollout zones (`a`, `b`, `c`), while Strimzi advertises full AWS availability-zone names. The existing configuration therefore does not establish same-AZ reads. The cost documentation now records this limitation and an operational correction/verification task. The stable StatefulSet zone names and PVC identities must remain intact. No runtime configuration change or read-locality validation was performed for this finding.
+
+The native Mimir configuration checks run `-print.config`; they do not start ingester modules, discover Kafka group coordinators, or prove readiness. A stronger startup fixture and live internal-topic/coordinator health remain necessary to close that gap.

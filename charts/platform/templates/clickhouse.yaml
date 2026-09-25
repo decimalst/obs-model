@@ -130,7 +130,7 @@ spec:
           shards:
             {{- range $i := until (int .Values.clickhouse.shards) }}
             - name: {{ $i | quote }}
-              internalReplication: Enabled
+              internalReplication: "true"
               replicasCount: {{ $.Values.clickhouse.replicas }}
             {{- end }}
     profiles:

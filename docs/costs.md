@@ -8,7 +8,7 @@ The cost objective is regional locality with explicit telemetry ceilings, not th
 - There is no cross-region S3/Kafka replication, peering, or automatic bulk ingestion failover.
 - Each AZ has a local NAT path. A single shared NAT would lower its fixed fee but introduce a failure dependency and cross-AZ egress.
 - S3 gateway endpoints keep bulk object traffic off NAT. Public registry image pulls still traverse NAT; a regional ECR mirror can reduce repeat pulls and external dependencies.
-- Kafka advertises racks and Mimir ingester rack hints align with AZ names, reducing avoidable cross-AZ reads. HA replication still transfers data between AZs and is not free.
+- Kafka advertises full AWS AZ names as racks. The pinned Mimir chart currently supplies its logical rollout zones (`a`, `b`, `c`) as client rack hints, so those hints do not match the brokers. Do not count on same-AZ Mimir reads or include that saving in cost estimates until the mapping is corrected and verified. HA replication also transfers data between AZs.
 - Remote Grafana queries, if later configured, transfer selected results; cap query ranges and avoid full raw-log exports.
 
 ## Volume equations
@@ -26,3 +26,5 @@ Backend compactors manage active object retention. Terraform only removes old ob
 Trace sampling exports 10% baseline candidates plus bounded priority traffic; it does not avoid the cost of receiving all spans needed for tail decisions. Filter or head-sample at the SDK only with an explicit acceptance that later errors cannot be recovered. Debug grants time-bound exceptional collection and remain inside the service's total quota.
 
 Use the HPA and cluster-autoscaler maxima as cost ceilings, monitor pending pods and ingestion refusal, and budget transient blue-green capacity. Neither an HPA nor a token bucket is a replacement for capacity planning.
+
+Operational TODO: map each Mimir ingester's Kafka client rack to its actual node AZ, then verify the effective client setting and broker rack metadata in every zone. Preserve the existing logical zone names, StatefulSet identities, selectors and PVCs; renaming zones to fix a locality hint would require a stateful migration. Kubernetes 1.35's PodTopologyLabels admission feature offers a possible downward-API source, but its availability in the selected cluster and the resulting read locality still need validation before adoption.

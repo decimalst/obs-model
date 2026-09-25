@@ -1,12 +1,14 @@
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import jsonschema
 import yaml
 
 from scripts.check_shard_changes import check
+from scripts.clickhouse_fixture import ClickHouseCluster
 from scripts.tuning import validate_tuning
 from tests.test_manifests import docs, strict
 
@@ -54,10 +56,7 @@ class Sharding(unittest.TestCase):
             actual = cluster["layout"]["shards"]
             self.assertEqual([s["name"] for s in actual], [str(i) for i in range(shards)])
             self.assertTrue(
-                all(
-                    s["replicasCount"] == 3 and s["internalReplication"] == "Enabled"
-                    for s in actual
-                )
+                all(s["replicasCount"] == 3 and s["internalReplication"] == "true" for s in actual)
             )
             self.assertEqual(cluster["schemaPolicy"], {"replica": "All", "shard": "All"})
             self.assertIn("valueFrom", cluster["secret"])
@@ -67,6 +66,26 @@ class Sharding(unittest.TestCase):
                 [{"type": "ShardAntiAffinity", "topologyKey": "topology.kubernetes.io/zone"}],
             )
             self.assertNotIn("affinity", pod["spec"])
+
+    def test_runtime_fixture_preserves_operator_replication_tokens(self):
+        # Pinned Altinity formats this field verbatim; a fixture that hardcodes
+        # true hides CRD-valid but ClickHouse-invalid values such as Enabled.
+        fleet = object.__new__(ClickHouseCluster)
+        fleet.replicas, fleet.shards = 3, 2
+        fleet.chi = self.resources()["ClickHouseInstallation", "observability"]
+        xml = ET.fromstring(fleet.xml(0, 0))
+        self.assertEqual(
+            [node.text for node in xml.findall("remote_servers/logs/shard/internal_replication")],
+            ["true", "true"],
+        )
+        fleet.chi["spec"]["configuration"]["clusters"][0]["layout"]["shards"][0][
+            "internalReplication"
+        ] = "Enabled"
+        invalid_xml = ET.fromstring(fleet.xml(0, 0))
+        self.assertEqual(
+            invalid_xml.find("remote_servers/logs/shard/internal_replication").text,
+            "Enabled",
+        )
 
     def test_acknowledgements_and_distributed_schema(self):
         d = self.resources()
