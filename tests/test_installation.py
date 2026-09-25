@@ -286,6 +286,24 @@ class Installation(unittest.TestCase):
                 & set(command)
             )
 
+    def test_preflight_helm_list_flags_parse_without_cluster_access(self):
+        p = configuration()
+        inventory = Inventory(p)
+        preflight(p, inventory)
+        listing = next(call for call in inventory.calls if call[:2] == ["helm", "list"])
+        self.assertTrue(
+            {
+                "--deployed",
+                "--failed",
+                "--pending",
+                "--uninstalled",
+                "--superseded",
+                "--uninstalling",
+            }.issubset(listing)
+        )
+        parsed = subprocess.run([*listing, "--help"], capture_output=True, text=True, timeout=15)
+        self.assertEqual(parsed.returncode, 0, parsed.stderr)
+
     def test_support_preflight_requires_owner_opt_in_and_secret_keys_only(self):
         for missing in ["namespace", "canary", "receiver", None]:
             with self.subTest(missing=missing):

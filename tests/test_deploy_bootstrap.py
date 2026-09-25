@@ -18,7 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class DeployBootstrapTests(unittest.TestCase):
     def deploy(
-        self, *, existing=False, cert_manager=True, otel=True, fail_list=False, fail_bootstrap=False
+        self,
+        *,
+        existing=False,
+        cert_manager=True,
+        otel=True,
+        fail_list=False,
+        fail_bootstrap=False,
+        existing_status="deployed",
     ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -68,7 +75,8 @@ if name == 'helm' and 'components.opentelemetry-operator=false' in sys.argv:
 if name == 'helm' and sys.argv[1] == 'list':
     if os.environ['TEST_FAIL_LIST'] == 'yes':
         sys.exit(1)
-    releases = [{'name': 'operators', 'namespace': 'observability-system'}]
+    releases = [{'name': 'operators', 'namespace': 'observability-system',
+                 'status': os.environ['TEST_EXISTING_STATUS']}]
     print(json.dumps(releases if os.environ['TEST_EXISTING'] == 'yes' else []))
 if name == 'kubectl' and sys.argv[1:3] == ['create', 'namespace']:
     print('apiVersion: v1\\nkind: Namespace\\nmetadata: {name: observability}')
@@ -86,6 +94,7 @@ if name == 'kubectl' and sys.argv[1:4] == ['apply', '-f', '-']:
                 "PYTHON": sys.executable,
                 "TEST_CALLS": str(log),
                 "TEST_EXISTING": "yes" if existing else "no",
+                "TEST_EXISTING_STATUS": existing_status,
                 "TEST_FAIL_LIST": "yes" if fail_list else "no",
                 "TEST_FAIL_BOOTSTRAP": "yes" if fail_bootstrap else "no",
             }
@@ -116,7 +125,14 @@ if name == 'kubectl' and sys.argv[1:4] == ['apply', '-f', '-']:
         self.assertLess(calls.index(seed), calls.index(upgrades[2]))
 
     def test_upgrades_and_reused_controllers_never_disable_owned_otel(self):
-        for options in ({"existing": True}, {"cert_manager": False}, {"otel": False}):
+        for options in (
+            {"existing": True},
+            {"existing": True, "existing_status": "failed"},
+            {"existing": True, "existing_status": "pending-install"},
+            {"existing": True, "existing_status": "pending-upgrade"},
+            {"cert_manager": False},
+            {"otel": False},
+        ):
             with self.subTest(**options):
                 result, calls = self.deploy(**options)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -129,6 +145,28 @@ if name == 'kubectl' and sys.argv[1:4] == ['apply', '-f', '-']:
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(call[:2] == ["helm", "upgrade"] for call in calls))
         self.assertFalse(any(call[0] == "kubectl" for call in calls))
+
+    def test_deployment_helm_flags_parse_with_installed_cli_without_cluster_access(self):
+        result, calls = self.deploy()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        expected_statuses = {
+            "--deployed",
+            "--failed",
+            "--pending",
+            "--uninstalled",
+            "--superseded",
+            "--uninstalling",
+        }
+        listing = next(call for call in calls if call[:2] == ["helm", "list"])
+        self.assertTrue(expected_statuses.issubset(listing))
+        for command in (call for call in calls if call[0] == "helm"):
+            # Cobra parses flags before help, and exits before opening a cluster
+            # connection or reading any chart/values. Mocks alone miss removals.
+            with self.subTest(command=command[:4]):
+                parsed = subprocess.run(
+                    [*command, "--help"], capture_output=True, text=True, timeout=15
+                )
+                self.assertEqual(parsed.returncode, 0, parsed.stderr)
 
     def test_failed_controller_readiness_stops_before_otel_or_secret_seeding(self):
         result, calls = self.deploy(fail_bootstrap=True)

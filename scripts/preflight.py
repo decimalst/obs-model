@@ -287,7 +287,23 @@ def preflight(p, reader=read):
         validate_storage_class(sc)
     crds = {c["metadata"]["name"]: c for c in kube("crds")["items"]}
     deployments = kube("deployments", "-A")["items"]
-    releases = reader(["helm", "list", "-A", "--all", "-o", "json"])
+    # Helm 4 removed --all; explicit statuses also preserve Helm 3 ownership
+    # checks for releases left failed or pending by an interrupted deployment.
+    releases = reader(
+        [
+            "helm",
+            "list",
+            "-A",
+            "--deployed",
+            "--failed",
+            "--pending",
+            "--uninstalled",
+            "--superseded",
+            "--uninstalling",
+            "-o",
+            "json",
+        ]
+    )
     owns_operators = any(
         r["name"] == "operators" and r["namespace"] == "observability-system" for r in releases
     )

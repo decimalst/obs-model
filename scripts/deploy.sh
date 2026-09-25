@@ -25,7 +25,8 @@ import json, subprocess, sys, yaml
 with open(sys.argv[1]) as source:
     components = yaml.safe_load(source).get('components', {})
 releases = json.loads(subprocess.run(
-    ['helm', 'list', '-A', '--all', '--filter', '^operators$', '-o', 'json'],
+    ['helm', 'list', '-A', '--deployed', '--failed', '--pending', '--uninstalled',
+     '--superseded', '--uninstalling', '--filter', '^operators$', '-o', 'json'],
     check=True, capture_output=True, text=True,
 ).stdout)
 exists = any(r['name'] == 'operators' and r['namespace'] == 'observability-system'
