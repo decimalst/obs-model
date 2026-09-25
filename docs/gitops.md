@@ -4,7 +4,7 @@ Git is the desired state for pipelines, dashboards, saved queries, recording rul
 
 ## Onboard a region once
 
-1. Complete the existing-cluster or new-cluster installer, its preflight checks, secret seeding, schema creation and smoke test. Flux adoption intentionally uses the same Helm names (`operators`, `olly`) and storage namespaces. Do not run two independent deployment writers afterwards.
+1. Complete the existing-cluster or new-cluster installer, its preflight checks, secret seeding, schema creation and smoke test. The installer makes cert-manager's CRDs and webhook ready before enabling OTel in the same operators release; exporting GitOps files alone does not bootstrap fresh controllers. Flux adoption intentionally uses the same Helm names (`operators`, `olly`) and storage namespaces. Do not run two independent deployment writers afterwards.
 2. Export nonsecret desired state, using the same image digest and deployment contract:
 
    ```sh

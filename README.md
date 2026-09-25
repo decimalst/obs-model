@@ -66,6 +66,8 @@ Remove `--check-only` to install after prerequisites pass. The configuration can
 
 For a new region, follow [the runbook](docs/runbooks.md). Terraform planning/applying is a separate operator action. A private runner, AWS account, state bucket, administrative role, and published quota image digest are required. The installer checks the actual API endpoint and cluster identity and uses existing AWS/Kubernetes secret mechanisms; it never embeds real credentials in example values.
 
+For a time-bounded first AWS deployment, use the [disposable three-AZ lab](docs/aws-lab.md). Its separate Terraform root adds a private installation runner, caps worker capacity, and documents cost estimates, stored-signal checks and cleanup of retained volumes, snapshots and versioned objects. Live deployment and deletion require an explicitly authorized account and run; ordinary validation never creates cloud resources.
+
 Start with one region, pass live acceptance, then repeat for the second. Bulk telemetry stays in its originating region. There is no automatic cross-region ingestion failover or raw-data replication by default.
 
 ## Enable debug collection for eight hours

@@ -11,10 +11,7 @@ setup:
 	$(PYTHON) -m pip install -r requirements-dev.txt
 	npm ci --ignore-scripts
 deps:
-	helm dependency build charts/operators
-	helm dependency build charts/platform
-	helm dependency build charts/flink-operator
-	helm dependency build integrations/cilium
+	$(PYTHON) scripts/helm_dependencies.py charts/operators charts/platform charts/flink-operator integrations/cilium
 render:
 	$(PYTHON) scripts/render.py
 lint:
@@ -34,12 +31,15 @@ schemas: render
 	$(KUBECONFORM) -strict -summary -kubernetes-version 1.35.0 -ignore-missing-schemas build/platform.yaml build/operators.yaml build/debug-grants.yaml build/flink-operator.yaml
 check: studio-test lint test schemas service-test
 terraform-init:
+	terraform -chdir=terraform/live/lab init -backend=false
 	terraform -chdir=terraform/modules/platform-services init -backend=false
 	terraform -chdir=terraform/live/existing-cluster init -backend=false
 	terraform -chdir=terraform/modules/region init -backend=false
 	terraform -chdir=terraform/live/us-east-1 init -backend=false
 	terraform -chdir=terraform/live/us-west-2 init -backend=false
 terraform-test:
+	terraform -chdir=terraform/live/lab validate
+	terraform -chdir=terraform/live/lab test
 	terraform -chdir=terraform/modules/platform-services validate
 	terraform -chdir=terraform/modules/platform-services test
 	terraform -chdir=terraform/live/existing-cluster validate

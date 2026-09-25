@@ -4,6 +4,11 @@
 Altinity 0.27.3 repeats schema descriptions and identical type keys. We permit
 only those nonsemantic duplicates in that pinned dependency, then emit canonical
 JSON/YAML. Conflicting schema keys always fail; all other packages are strict.
+
+Cert-manager's templated CRDs stay owned by the operators Helm release. On a
+fresh CLI install, deploy.sh first installs that same release without OTel,
+waits for cert-manager readiness, then enables OTel's Certificate/Issuer users.
+Do not apply those templated CRDs out of band or adopt an external controller.
 """
 
 import argparse

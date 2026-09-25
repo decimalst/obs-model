@@ -2,6 +2,8 @@
 
 ## Bootstrap and deploy
 
+For an authorized, short-lived real-account deployment test, use the [disposable AWS lab procedure](aws-lab.md). It preserves the production HA topology and makes private-runner setup, cost controls and retained-resource cleanup explicit.
+
 For existing EKS, IAM roles, controllers, storage classes or data services, use [the existing-environment guide](existing-clusters.md). That path has a different ownership boundary and does not create or adopt the cluster.
 
 Deployment also requires AWS CLI v2, kubectl compatible with EKS 1.35, and the Argo Rollouts kubectl plugin compatible with controller 1.10.0. The private runner must have API network access as well as the configured EKS access entry.
