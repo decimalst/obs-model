@@ -50,6 +50,9 @@ terraform-test:
 	terraform -chdir=terraform/live/us-west-2 validate
 runtime-test:
 	$(PYTHON) scripts/runtime_test.py
+.PHONY: mimir-startup-test
+mimir-startup-test:
+	$(PYTHON) scripts/mimir_startup_test.py
 image:
 	docker build -t observability/log-quota:0.1.0 services/log-quota
 .PHONY: integration-test
