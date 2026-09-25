@@ -18,6 +18,16 @@ v=yaml.safe_load(open(sys.argv[1]))
 assert '@sha256:' in v['images']['quota'], 'Publish and pin the log-quota image first'
 assert not any('REPLACE' in str(x) for x in v.values()), 'Unresolved regional values'
 PY
+# Argo owns the injected Service selector hash. Helm 4's SSA conflicts on the
+# selector map; retain Helm 3's three-way client-side merge for this release.
+# Detect the major version before any writes; Helm 3 has no --server-side flag.
+helm_version=$(helm version --short)
+platform_apply_args=(--timeout 15m)
+case "$helm_version" in
+  v4.*) platform_apply_args+=(--server-side=false) ;;
+  v3.*) ;;
+  *) echo "Unsupported Helm version; the installer supports Helm 3 and 4." >&2; exit 2 ;;
+esac
 # A failed lookup must not be mistaken for a fresh install: disabling an
 # existing OTel controller even briefly would remove its Helm-owned resources.
 bootstrap_operators=$("$python_bin" - "$operators_values" <<'PY'
@@ -56,7 +66,8 @@ helm upgrade --install operators charts/operators -n observability-system --crea
 "$python_bin" scripts/seed_secrets.py --terraform-output "$terraform_output"
 # Rollouts deliberately pause on upgrades. --wait here can deadlock on promotion;
 # deployment readiness and data-path checks are explicit subsequent stages.
-helm upgrade --install olly charts/platform -n observability -f "$values_file" --timeout 15m
+helm upgrade --install olly charts/platform -n observability -f "$values_file" \
+  "${platform_apply_args[@]}"
 kubectl -n observability wait --for=condition=Ready kafka/telemetry --timeout=15m
 kubectl -n observability wait --for=jsonpath='{.status.status}'=Completed clickhouseinstallation/observability --timeout=15m
 scripts/schema.sh
