@@ -25,7 +25,7 @@ For a repeatable offline CLI export, use Node 24:
 node scripts/configure.mjs deployment-request.json environments/olly-production
 ```
 
-The CLI uses the same compiler as the browser and refuses to overwrite an existing destination. Extract browser ZIPs to `environments/NAME/` inside this repository: the generated Terraform module source is relative to that location. New deployments require an encrypted regional Terraform state backend and an out-of-band sensitive quota password. After an authorized Terraform apply, export its platform output, run the read-only installer preflight, then follow the installation/GitOps runbook. The configurator never deploys. CI's Terraform plan/apply tests use a mocked AWS provider and create no cloud resources.
+The CLI uses the same compiler as the browser and refuses to overwrite an existing destination. Extract browser ZIPs to `environments/NAME/` inside this checkout: the generated Terraform module source is relative to that location. This public source repository ignores `environments/` to keep private deployment details out of commits. To manage those files through Git, use a deliberately private infrastructure repository and preserve or adjust the module paths; review its ignore rules before tracking configuration. Never commit state, plans or credentials. New deployments require an encrypted regional Terraform state backend and an out-of-band sensitive quota password. After an authorized Terraform apply, export its platform output, run the read-only installer preflight, then follow the installation/GitOps runbook. The configurator never deploys. CI's Terraform plan/apply tests use a mocked AWS provider and create no cloud resources.
 
 Existing deployments enter their regional endpoints, bucket names, roles and controller ownership directly, or import a nonsecret platform contract as JSON with **all** operator install/reuse flags explicitly set. The studio uses existing Kubernetes Secrets and storage classes. The more general CLI installer still supports the other existing infrastructure/secret paths documented in `existing-clusters.md`. The studio is a curated subset, not an editor for every chart value; additional tuning is available through the validated pipeline override file.
 
@@ -70,7 +70,7 @@ Replica/shard/partition changes are not automatically safe against an existing d
 
 ## Publish the studio
 
-The repository currently needs a GitHub remote before it can have a Pages URL. Once pushed to the chosen repository:
+The source repository is [decimalst/obs-model](https://github.com/decimalst/obs-model). GitHub Pages is an optional, separate publication step; a source push does not publish the studio. To publish it from your repository:
 
 1. Enable Pages with **GitHub Actions** as its source. Protect the `github-pages` environment and restrict deployment to the reviewed default branch.
 2. Run the **publish-configuration-studio** workflow manually. It tests the compiler, builds a fixed static allowlist and deploys only that artifact with a short-lived GitHub deployment identity.

@@ -1,6 +1,6 @@
 # Deferred AWS qualification batch
 
-All AWS creation, EKS execution, real receiver delivery and fault/restore testing are **deferred to the account owner**. The local command below prepares a single ordered acceptance batch and records evidence; it has no AWS, Kubernetes, shell, deployment or network execution path. A passing local test suite does not pass any of these gates.
+Each deployment's AWS creation, EKS execution, real receiver delivery and fault/restore testing require a separate **account-owner qualification run**. The [September 25 disposable lab](validation.md#2026-09-25-authorized-disposable-aws-deployment) provides bounded deployment and stored-signal evidence; it did not complete this batch or qualify another configuration. The local command below prepares a single ordered acceptance batch and records evidence; it has no AWS, Kubernetes, shell, deployment or network execution path. A passing local test suite does not pass any of these gates. Unexecuted gates remain pending.
 
 ## Prepare locally
 

@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose an improvement with a concrete operational use case.
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use synthetic service and environment names. Keep credentials, private inventories, and captured telemetry out of this public request.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and what is difficult with the current platform?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the user-visible result, configuration choices, and how you would know it works.
+    validations:
+      required: true
+  - type: textarea
+    id: operations
+    attributes:
+      label: Operational considerations
+      description: Known effects on ownership, regional data movement, cost, quotas, stateful upgrades, or existing installations. It is fine to identify open questions.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Existing configuration, integrations, or workarounds you considered.

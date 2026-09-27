@@ -6,9 +6,15 @@ build/
 *.tfplan
 *.auto.tfvars*
 *.tfvars
+*.tfvars.json
 !*.example.tfvars
+!*.example.tfvars.json
 *.secret.yaml
 .env
+.env.*
+!.env.example
+# Downloaded deployment bundles belong in a private infrastructure repository.
+/environments/
 __pycache__/
 .ruff_cache/
 .DS_Store

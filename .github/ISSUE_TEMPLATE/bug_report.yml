@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a reproducible configuration, pipeline, or tooling problem.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For vulnerabilities, follow SECURITY.md at the repository root instead of disclosing details here.
+        Use synthetic examples. Do not attach raw logs, telemetry, pod specifications, Secrets, Terraform state/plans, or generated private configuration.
+  - type: input
+    id: revision
+    attributes:
+      label: Repository revision
+      description: Commit SHA or release containing the problem.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where does it happen?
+      options:
+        - Local rendering or tests
+        - Configuration Studio
+        - New EKS deployment
+        - Existing EKS deployment
+        - GitOps reconciliation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Affected component and versions
+      description: Relevant tool, chart, image, or Kubernetes versions; omit account IDs, cluster names, hostnames, and other private coordinates.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Numbered steps and the smallest synthetic input that demonstrates the problem. Describe command options without credentials or private values.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include a sanitized error summary and which step failed. Do not paste raw diagnostic output.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks and workaround
+      description: Relevant test commands and pass/fail results, checks not run, and any workaround. Do not deploy cloud resources solely to complete this report.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reviewed this report for private data and used synthetic examples.
+          required: true

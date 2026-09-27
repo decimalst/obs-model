@@ -1,12 +1,21 @@
-Describe the changed behavior and its operational effect.
+## Change
 
-Validation performed:
+Describe the problem, resulting behavior, and operational effect.
 
-- [ ] Relevant unit / policy / runtime checks pass
-- [ ] Regional routing, quota scope, and debug expiry remain correct
-- [ ] Stateful upgrade, rollback, and cost implications documented
-- [ ] Pipeline input/output and alert behavior fixtures updated
-- [ ] GitOps ownership and drift exceptions remain narrowly scoped
-- [ ] Cardinality/identity, partition capacity and Arrow compatibility checked
+## Validation
 
-Cloud or failure tests not run:
+List the commands run and results. State unavailable checks and live scenarios not tested. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the suites relevant to this change.
+
+## Operations
+
+Describe migration, recovery, ownership, capacity, and cost implications, or state why they do not apply.
+
+## Review checklist
+
+Mark items that apply; explain any exceptions above.
+
+- [ ] Tests cover changed behavior and relevant failure cases; generated artifacts are in sync.
+- [ ] Regional routing, quota scope, debug expiry, and trace affinity remain correct where affected.
+- [ ] Stateful changes have migration instructions; existing resource and controller ownership is preserved.
+- [ ] The diff and attachments contain no credentials, state/plan files, private configuration, or captured telemetry.
+- [ ] Claims distinguish local checks from live qualification; unexecuted live gates remain pending.
