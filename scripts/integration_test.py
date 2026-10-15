@@ -36,11 +36,51 @@ def wait(probe, description, timeout=45):
         time.sleep(min(1, remaining))
 
 
+def diagnostic(label, probe):
+    try:
+        print(label + ":", probe(), flush=True)
+    except Exception as error:
+        print(label + " unavailable:", error, flush=True)
+
+
+def delivery_diagnostics(sql, quota_addr, kafka):
+    diagnostic(
+        "Stored records by service",
+        lambda: sql(
+            "SELECT service_name,count(),uniqExact(event_id) "
+            "FROM observability.logs GROUP BY service_name"
+        ),
+    )
+
+    def quota_metrics():
+        with urllib.request.urlopen(f"http://{quota_addr}/metrics", timeout=5) as response:
+            return response.read().decode()
+
+    diagnostic("Quota metrics", quota_metrics)
+    diagnostic(
+        "Kafka consumer offsets",
+        lambda: command(
+            [
+                "docker",
+                "exec",
+                kafka,
+                "/opt/kafka/bin/kafka-consumer-groups.sh",
+                "--bootstrap-server",
+                "localhost:9092",
+                "--describe",
+                "--group",
+                "clickhouse-writer-v1",
+            ]
+        ),
+    )
+
+
 def main():
     render()
     prefix = "olly-test-" + uuid.uuid4().hex[:8]
     network = prefix
     containers = []
+    sql, quota_addr, kafka = None, "", ""
     directory = ROOT / "build/integration"
     directory.mkdir(exist_ok=True, parents=True)
     values = yaml.safe_load((ROOT / "charts/platform/values.yaml").read_text())
@@ -349,36 +389,7 @@ def main():
     except Exception as error:
         # These are disposable fixtures. Preserve evidence of partial delivery
         # before cleanup, including quota rejection/upstream failures.
-        try:
-            print(
-                "Stored records by service:",
-                sql(
-                    "SELECT service_name,count(),uniqExact(event_id) "
-                    "FROM observability.logs GROUP BY service_name"
-                ),
-                flush=True,
-            )
-            with urllib.request.urlopen(f"http://{quota_addr}/metrics", timeout=5) as response:
-                print("Quota metrics:", response.read().decode(), flush=True)
-            print(
-                "Kafka consumer offsets:",
-                command(
-                    [
-                        "docker",
-                        "exec",
-                        kafka,
-                        "/opt/kafka/bin/kafka-consumer-groups.sh",
-                        "--bootstrap-server",
-                        "localhost:9092",
-                        "--describe",
-                        "--group",
-                        "clickhouse-writer-v1",
-                    ]
-                ),
-                flush=True,
-            )
-        except Exception as diagnostic_error:
-            print("Delivery diagnostics unavailable:", diagnostic_error, flush=True)
+        delivery_diagnostics(sql, quota_addr, kafka)
         try:
             sql("SYSTEM FLUSH LOGS")
             print(
