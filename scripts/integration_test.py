@@ -22,6 +22,20 @@ def command(args, **kwargs):
     return subprocess.run(args, check=True, capture_output=True, text=True, **kwargs).stdout.strip()
 
 
+def wait(probe, description, timeout=45):
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            if probe():
+                return
+        except (subprocess.CalledProcessError, OSError):
+            pass
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("Timed out: " + description)
+        time.sleep(min(1, remaining))
+
+
 def main():
     render()
     prefix = "olly-test-" + uuid.uuid4().hex[:8]
@@ -53,16 +67,6 @@ def main():
         )
         containers.append(result)
         return result
-
-    def wait(probe, description):
-        for _ in range(45):
-            try:
-                if probe():
-                    return
-            except (subprocess.CalledProcessError, OSError):
-                pass
-            time.sleep(1)
-        raise RuntimeError("Timed out: " + description)
 
     try:
         start("valkey", "valkey/valkey:8.0.6-alpine")
@@ -298,7 +302,13 @@ def main():
             urllib.request.Request(f"http://{agent_addr}", data=body, method="POST"), timeout=20
         ) as response:
             assert response.status == 200
-        wait(lambda: int(sql("SELECT count() FROM observability.logs")) >= 7, "end-to-end delivery")
+        # Cold Kafka group assignment and sink retries share this bounded delivery
+        # budget. Send the fixture once: replaying it would change quota admission.
+        wait(
+            lambda: int(sql("SELECT count() FROM observability.logs")) >= 7,
+            "end-to-end delivery",
+            timeout=120,
+        )
         counts = dict(
             line.split("\t")
             for line in sql(
@@ -337,6 +347,38 @@ def main():
             "5 flood errors, 1 quiet log, 1 granted debug; expired debug absent; 7 derived events."
         )
     except Exception as error:
+        # These are disposable fixtures. Preserve evidence of partial delivery
+        # before cleanup, including quota rejection/upstream failures.
+        try:
+            print(
+                "Stored records by service:",
+                sql(
+                    "SELECT service_name,count(),uniqExact(event_id) "
+                    "FROM observability.logs GROUP BY service_name"
+                ),
+                flush=True,
+            )
+            with urllib.request.urlopen(f"http://{quota_addr}/metrics", timeout=5) as response:
+                print("Quota metrics:", response.read().decode(), flush=True)
+            print(
+                "Kafka consumer offsets:",
+                command(
+                    [
+                        "docker",
+                        "exec",
+                        kafka,
+                        "/opt/kafka/bin/kafka-consumer-groups.sh",
+                        "--bootstrap-server",
+                        "localhost:9092",
+                        "--describe",
+                        "--group",
+                        "clickhouse-writer-v1",
+                    ]
+                ),
+                flush=True,
+            )
+        except Exception as diagnostic_error:
+            print("Delivery diagnostics unavailable:", diagnostic_error, flush=True)
         try:
             sql("SYSTEM FLUSH LOGS")
             print(

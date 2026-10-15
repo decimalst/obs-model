@@ -22,6 +22,11 @@ test("new cluster bundle keeps secrets out and preserves regional topology", () 
   const f = compileRequest(r),
     tf = JSON.parse(f["main.tf.json"]);
   assert.equal(tf.module.region.enable_profiling, true);
+  const regionalRoot = readFileSync("terraform/live/us-east-1/main.tf", "utf8");
+  const awsConstraint = regionalRoot.match(
+    /aws = \{ source = "hashicorp\/aws", version = "([^"]+)" \}/,
+  )[1];
+  assert.equal(tf.terraform.required_providers.aws.version, awsConstraint);
   assert.equal(
     tf.module.region.quota_redis_auth_token,
     "${var.quota_redis_auth_token}",
