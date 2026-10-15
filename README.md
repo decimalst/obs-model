@@ -131,7 +131,7 @@ The platform assumes trusted workload metadata and a protected platform namespac
 
 ## Validate locally
 
-CI pins Python 3.14, Go 1.25.8, Node 24.19.0, Terraform 1.15.8, Helm 4.2.3, kubectl 1.35.0 and kubeconform 0.7.0. You also need npm, Docker, Bash, Make and OpenSSL. Exact dependencies live in the [CI workflow](.github/workflows/ci.yaml), chart locks and Terraform provider locks. The installer also supports Helm 3.16.
+CI pins Python 3.14, Go 1.27.0, Node 24.19.0, Terraform 1.15.8, Helm 4.2.3, kubectl 1.35.0 and kubeconform 0.7.0. You also need npm, Docker, Bash, Make and OpenSSL. Exact dependencies live in the [CI workflow](.github/workflows/ci.yaml), chart locks and Terraform provider locks. The installer also supports Helm 3.16.
 
 ```sh
 go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0
