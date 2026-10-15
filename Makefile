@@ -103,10 +103,11 @@ service-test:
 
 .PHONY: studio-terraform-test
 studio-terraform-test: studio-test
-	cp terraform/live/us-east-1/.terraform.lock.hcl build/studio-new/.terraform.lock.hcl
+	# Studio exports retain the exact provider pin shared with the lab root.
+	cp terraform/live/lab/.terraform.lock.hcl build/studio-new/.terraform.lock.hcl
 	terraform -chdir=build/studio-new init -backend=false -lockfile=readonly
 	terraform -chdir=build/studio-new validate
-	cp terraform/live/us-east-1/.terraform.lock.hcl build/studio-iam/.terraform.lock.hcl
+	cp terraform/live/lab/.terraform.lock.hcl build/studio-iam/.terraform.lock.hcl
 	terraform -chdir=build/studio-iam init -backend=false -lockfile=readonly
 	terraform -chdir=build/studio-iam validate
 
