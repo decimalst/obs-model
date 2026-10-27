@@ -13,6 +13,7 @@ FILES = (
     "policies.mjs",
     "operations.mjs",
     "iam.mjs",
+    "architecture.mjs",
 )
 
 

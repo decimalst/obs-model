@@ -611,31 +611,31 @@
           </div>
           <aside class="summary">
             <span class="eyebrow">YOUR REGIONAL CELL</span>
-            <h2>Connected by default.</h2>
-            <div class="pipeline">
-              <span>Applications</span><i>↓</i>
-              <div>Vector <b>+</b> OpenTelemetry</div>
-              <i>↓</i>
-              <div class="storage">
-                <span>ClickHouse</span><span>Mimir</span><span>Tempo</span>
-              </div>
-              <i>↓</i><span>One Grafana workspace</span>
-            </div>
-            <div class="summary-row">
-              <span>Availability zones</span><b>3</b>
-            </div>
-            <div class="summary-row">
-              <span>Raw data replication</span><b>Regional</b>
-            </div>
-            <div class="summary-row">
-              <span>Configuration ownership</span><b>Git</b>
-            </div>
+            <h2>Your choices, connected.</h2>
+            <div id="architecture-summary"></div>
+            <button type="button" id="architecture-open" class="secondary">
+              Explore the architecture ↓
+            </button>
             <p>
-              Admission quotas, Arrow interconnects, metric cardinality controls
-              and trace-aware routing are included.
+              Updates as you edit. Highlighted values differ from the defaults.
             </p>
           </aside>
         </div>
+        <details id="architecture" class="architecture" open>
+          <summary>Live architecture · what your configuration changes</summary>
+          <h2 id="architecture-region"></h2>
+          <p id="architecture-status" role="status"></p>
+          <p class="architecture-legend">
+            Amber: changed from defaults · Green outline: current step · Dashed:
+            optional · Blue-gray: external ownership
+          </p>
+          <p class="hint">
+            One regional cell. Arrows follow ingestion; Grafana queries the
+            enabled backends. The same OTel agent appears in both metrics and
+            traces. This is a configuration preview, not a live deployment.
+          </p>
+          <div id="architecture-map"></div>
+        </details>
       </section>
       <section id="catalog" class="view" hidden>
         <div class="eyebrow">OWNERSHIP MEETS OBSERVABILITY</div>

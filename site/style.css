@@ -7,6 +7,137 @@
   --mint: #d6f5b0;
   --paper: #f7f8f3;
 }
+.architecture {
+  margin: 32px 0 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.architecture > summary {
+  cursor: pointer;
+  font-size: 20px;
+  font-weight: 600;
+}
+.architecture h2 {
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+.architecture h3 {
+  font-size: 16px;
+  margin-top: 28px;
+}
+.architecture-legend,
+#architecture-status {
+  font-size: 13px;
+}
+.architecture-flow,
+.architecture-foundation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 22px;
+  list-style: none;
+  padding: 0;
+}
+.architecture-foundation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.architecture-node {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 16px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.architecture-node h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.architecture-node p {
+  margin: 6px 0;
+  font-size: 12px;
+}
+.architecture-node[data-external="true"] {
+  background: #edf3f7;
+}
+.architecture-node[data-changed="true"] {
+  background: #fff5df;
+  border-color: #c49742;
+}
+.architecture-node[data-optional="true"] {
+  border-style: dashed;
+}
+.architecture-node[data-enabled="false"] {
+  color: var(--muted);
+}
+.architecture-node[data-current="true"] {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.architecture-node .architecture-badges {
+  font-size: 11px;
+  font-weight: 600;
+}
+.architecture-flow .architecture-node:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -19px;
+  top: 22px;
+  color: var(--muted);
+}
+.architecture-edit {
+  margin-top: 8px;
+  padding: 4px 0;
+  color: var(--green);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+}
+.architecture-summary-row {
+  padding: 12px 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.architecture-summary-row[data-changed="true"] {
+  background: #fff5df;
+}
+.architecture-summary-row strong,
+.architecture-summary-row span,
+.architecture-summary-row small {
+  display: block;
+  font-size: 12px;
+}
+.architecture-summary-row small {
+  color: #784600;
+}
+@media (min-width: 1151px) {
+  .studio-layout > .summary {
+    position: sticky;
+    top: 20px;
+    align-self: start;
+  }
+}
+@media (max-width: 1100px) {
+  .architecture-flow {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .architecture-foundation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .architecture-flow .architecture-node:not(:last-child)::after {
+    content: "↓";
+    right: auto;
+    top: auto;
+    bottom: -24px;
+    left: 20px;
+  }
+}
+@media (max-width: 600px) {
+  .architecture-foundation {
+    grid-template-columns: 1fr;
+  }
+}
 * {
   box-sizing: border-box;
 }

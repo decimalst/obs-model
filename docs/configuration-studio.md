@@ -9,6 +9,9 @@
 - Editable security, privacy, service graph, cell planning and recovery/qualification options with inline setup guidance and conditional fields.
 - Full request import/export to resume advanced selections without rebuilding them by hand.
 - A role-by-role IAM review with created/reused ownership, trust, permissions, service-account bindings and separate provisioning/EKS administration choices.
+- A live architecture map and compact overview driven by the current form. Event budgets, shard/replica counts, sampling, startup timing and optional features update immediately, including after a valid request import. Amber marks changes from defaults; green outlines mark the current step. Optional components and external infrastructure have explicit labels. Edit links return to the related step.
+
+The architecture is a read-only configuration preview, not an inventory of a running cluster. Incomplete or invalid selections remain labeled as drafts, and consumer ceilings stay bounded by the selected Kafka partition count. The map preserves the distinction between write shards and replicas, pre-tail branches, externally owned controllers/Cilium, and operational plans that only generate files. It never treats qualification selections as deployment or passing evidence. The public asset allowlist includes `architecture.mjs`; private requests and catalog/environment files are not included.
 
 No secrets, account credentials, AWS queries or GitHub tokens are needed in the browser. It does not upload form data, store it in localStorage, automatically guess account AZ availability, apply infrastructure or publish an application. Closing/reloading the page loses unsaved selections; download the request to retain them. The only downloaded dependency is the site's own static code. Catalog text uses textContent; Grafana HTML is escaped; the page has a restrictive CSP and blocks form submissions.
 
