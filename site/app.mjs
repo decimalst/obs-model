@@ -10,6 +10,7 @@ import {
 } from "./model.mjs";
 import { createQualification } from "./operations.mjs";
 import { iamPlan } from "./iam.mjs";
+import { architectureModel, renderArchitecture } from "./architecture.mjs";
 const $ = (selector) => document.querySelector(selector),
   $$ = (selector) => [...document.querySelectorAll(selector)],
   form = $("#deployment-form");
@@ -1186,6 +1187,20 @@ function showFile(name) {
 }
 function update() {
   updateAdvanced();
+  const architecture = architectureModel(request(), step);
+  renderArchitecture(
+    $("#architecture-map"),
+    $("#architecture-summary"),
+    architecture,
+    (n) => {
+      setStep(n);
+      form.scrollIntoView({ block: "start" });
+    },
+  );
+  $("#architecture-region").textContent =
+    `${architecture.name} · ${architecture.region}`;
+  $("#architecture-status").textContent =
+    `${architecture.changedCount} areas changed from defaults. ${architecture.validation}`;
   const existing = new FormData(form).get("mode") === "existing";
   $("#existing-fields").hidden = !existing;
   $("#admin-field").hidden = existing;
@@ -1253,6 +1268,10 @@ $("#back").addEventListener("click", () => setStep(Math.max(0, step - 1)));
 form.addEventListener("input", update);
 form.addEventListener("change", update);
 form.addEventListener("submit", (e) => e.preventDefault());
+$("#architecture-open").addEventListener("click", () => {
+  $("#architecture").open = true;
+  $("#architecture").scrollIntoView({ block: "start" });
+});
 $("#download").addEventListener("click", () => {
   try {
     const r = request();
